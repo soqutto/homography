@@ -8,10 +8,40 @@ import numpy as np
 import sys
 import os.path
 import random
+import operator
 
 # リサイズ時の最大サイズ定義
 IMAGE_MAX_XSIZE = 800
 IMAGE_MAX_YSIZE = 1000
+
+# MyMatchクラス
+# マッチング点対をクラスとして再定義
+
+class MyMatch:
+    def __init__(self, point1, point2, distance, inlier):
+        # コンストラクタ
+        # 引数: 点1, 点2, 距離, インライア
+        self.point1 = point1
+        self.point2 = point2
+        self.distance = distance
+        self.inlier = inlier[0]
+
+    def isAccepted(self):
+        # その対応についてインライアを真偽値で返す
+        if self.inlier == 1:
+            return True
+        else:
+            return False
+
+    def enable(self):
+        # その対応について強制的に有効(インライア)にする
+        self.inlier = 1
+
+    def disable(self):
+        # その対応について強制的に無効(アウトライア)にする
+        self.inlier = 0
+
+
 
 # リサイズの計算
 # 縦は1000, 横は800が最大
@@ -112,18 +142,16 @@ def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForc
     
     # keep only the reasonable matches
     sel_matches = [m for m in matches if m.distance < thres_dist]
-    print "#threshold ratio:", threshold_ratio
-    print "#selected matches:", len(sel_matches)
+    print "#threshold ratio: %.3f" % threshold_ratio
+    print "#threshold distance: %.3f" % thres_dist
+    print "#selected matches: %d" % len(sel_matches)
     if len(sel_matches) <= 4:
         return (None, None)
 
-    # このソートを有効にすると結果が変わる可能性がある
-    sel_matches = sorted(sel_matches, key = lambda x:x.distance)
-    
-    # マッチングされた点の抽出(しきい値処理)
+    # マッチングされた点の抽出(しきい値処理済み)
     point1 = [[k1[m.queryIdx].pt[0], k1[m.queryIdx].pt[1]] for m in sel_matches]
     point2 = [[k2[m.trainIdx].pt[0], k2[m.trainIdx].pt[1]] for m in sel_matches]
-    distance_table = [m.distance for m in sel_matches]
+    dist_table = [m.distance for m in sel_matches]
     
     # マッチング点の範囲絞り込み
     #del_list = []
@@ -141,13 +169,35 @@ def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForc
     #
     #print "#selected matches:", len(point1)
     
+
+    # y座標差が規定を超えるものについて対応を無効とし
+    # 対応リストから削除する
+    Y_threshold = im1.shape[0] * 0.4
+    for i in range(len(point1)-1, -1, -1):
+        if abs(point1[i][1] - point2[i][1]) > Y_threshold:
+            del point1[i]
+            del point2[i]
+            dist_table.pop(i)
+
+    print "#selected matches(Y-subtraction over): %d" % len(point1)
+
     point1 = np.array(point1)
     point2 = np.array(point2)
-    
+
     # H: ホモグラフィ行列
     # Hstatus: RANSACにより取捨選択された点のマスク[0,1]
     H, Hstatus = cv2.findHomography(point2, point1, cv2.RANSAC)
-    
+
+    # インライアの数を計算
+    num_inliers = np.count_nonzero(Hstatus)
+
+    print "#selected matches(inliers): %d" % num_inliers
+    print "#selected matches(outliers): %d" % (len(point1) - num_inliers)
+
+    # MyMatchリストを作成
+    matches = [ MyMatch(p1, p2, d, stat) for (p1, p2, d, stat) \
+            in zip(point1, point2, dist_table, Hstatus) ]
+
     # 移動量を算出
     x = 0
     y = 0
@@ -171,27 +221,25 @@ def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForc
         for j in xrange(h1):
             dst[j,i] = im1[j,i]
 
-    return (dst, (point1, point2, distance_table))
+    return (dst, matches)
+    #return (dst, (point1, point2, dist_table))
     
 
-def draw_match(im1, im2, match, m=0, M=255):
+def draw_match(im1, im2, match_list, m=0, M=255, drawinliers=True):
 
     imcat = cv2.hconcat([im1, im2])
-
-    point1 = match[0]
-    point2 = match[1]
-    distance_table = match[2]
     hoffset = im1.shape[1]
-    #print distance_table
+    dist_max = max([i.distance for i in match_list])
 
-    for (p1, p2, d) in zip(point1, point2, distance_table):
-        if d >= m and d <= M:
-            color_hsv = np.uint8([[(100*(d/max(distance_table)), 255, 255)]])
-            color_rgb = cv2.cvtColor(color_hsv, cv2.COLOR_HSV2BGR)
-            color = tuple(map(int,color_rgb[0,0]))
-            origin = tuple(map(int, [p1[0], p1[1]]))
-            terminal = tuple(map(int, [p2[0]+hoffset, p2[1]]))
-            cv2.line(imcat, origin, terminal, color)
+    for p in match_list:
+        if p.distance >= m and p.distance <= M:
+            if drawinliers == True and p.isAccepted() or drawinliers == False: 
+                color_hsv = np.uint8([[(100*(p.distance/float(dist_max)), 255, 255)]])
+                color_rgb = cv2.cvtColor(color_hsv, cv2.COLOR_HSV2BGR)
+                color = tuple(map(int,color_rgb[0,0]))
+                origin = tuple(map(int, [p.point1[0], p.point1[1]]))
+                terminal = tuple(map(int, [p.point2[0]+hoffset, p.point2[1]]))
+                cv2.line(imcat, origin, terminal, color)
 
     return imcat
 
@@ -225,7 +273,7 @@ def main():
     im2 = image_trim(im2, (  0,100), (331,497))
 
     dst, match = composite_panorama( \
-            im1, im2, 'SURF', 'BRIEF', 'BruteForce-Hamming', 1.5)
+            im1, im2, 'SURF', 'BRIEF', 'BruteForce-Hamming', 1.2)
     #for i in range(0,30):
     #    dst, match = composite_panorama( \
     #         im1, im2, 'SURF', 'BRIEF', 'BruteForce-Hamming', 0.1+0.1*i)
