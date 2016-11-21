@@ -7,8 +7,7 @@ import cv2
 import numpy as np
 import sys
 import os.path
-import random
-import operator
+#import random
 
 # リサイズ時の最大サイズ定義
 IMAGE_MAX_XSIZE = 800
@@ -76,7 +75,6 @@ def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForc
         # SIFT検出器生成
         detector = cv2.FeatureDetector_create("SIFT")
         print "### Keypoint mode: SIFT"
-
     else:
         sys.exit("Unknown Keypoint")
 
@@ -99,6 +97,8 @@ def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForc
     elif desc == 'FREAK':
         descriptor = cv2.DescriptorExtractor_create("FREAK")
         print "### Descriptor mode: FREAK"
+    else:
+        sys.exit("Unknown Descriptor Type")
 
     # Matcher生成
     if matcher == 'BruteForce-Hamming':
@@ -116,6 +116,8 @@ def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForc
     elif matcher == 'FlannBased':
         keypointmatcher = cv2.DescriptorMatcher_create("FlannBased")
         print "### Keypoint-Matcher mode: FlannBased"
+    else:
+        sys.exit("Unknown Keypoint-Matcher type")
 
     # detect keypoints
     kp1 = detector.detect(im1_gray)
@@ -179,7 +181,7 @@ def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForc
             del point2[i]
             dist_table.pop(i)
 
-    print "#selected matches(Y-subtraction over): %d" % len(point1)
+    print "#selected matches(Y-subtraction over vertices were excluded): %d" % len(point1)
 
     point1 = np.array(point1)
     point2 = np.array(point2)
@@ -226,7 +228,6 @@ def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForc
     
 
 def draw_match(im1, im2, match_list, m=0, M=255, drawinliers=True):
-
     imcat = cv2.hconcat([im1, im2])
     hoffset = im1.shape[1]
     dist_max = max([i.distance for i in match_list])
@@ -272,18 +273,28 @@ def main():
     im1 = image_trim(im1, (220,160), (524,557))
     im2 = image_trim(im2, (  0,100), (331,497))
 
-    dst, match = composite_panorama( \
-            im1, im2, 'SURF', 'BRIEF', 'BruteForce-Hamming', 1.2)
-    #for i in range(0,30):
-    #    dst, match = composite_panorama( \
-    #         im1, im2, 'SURF', 'BRIEF', 'BruteForce-Hamming', 0.1+0.1*i)
-    #    if dst is not None:
-    #        cv2.imwrite("experiment/threshold_flower_surf/img-%02d.jpg" % (i+1), dst)
-    #        print "write: experiment/threshold_flower_surf/img-%02d.jpg" % (i+1)
+    #dst, match = composite_panorama( \
+    #        im1, im2, 'SURF', 'BRIEF', 'BruteForce-Hamming', 1.3)
+    #dst2 = draw_match(im1, im2, match)
+    #cv2.imwrite("homography.png", dst)
+    #cv2.imwrite("matching.png", dst2)
 
-    dst2 = draw_match(im1, im2, match)
-    cv2.imwrite("homography.png", dst)
-    cv2.imwrite("matching.png", dst2)
+
+    # マッチングしきい値変化実験イテレータ
+
+    # 画像保存ディレクトリの定義
+    os.chdir("experiment/threshold_flower_sift_Ycutoff")
+
+    for i in range(0,30):
+        dst, match = composite_panorama( \
+             im1, im2, 'SIFT', 'BRIEF', 'BruteForce-Hamming', 0.1+0.1*i)
+        if dst is not None:
+            dst2 = draw_match(im1, im2, match)
+            cv2.imwrite("img-%02d.jpg" % (i+1), dst)
+            cv2.imwrite("match-%02d.png" % (i+1), dst2)
+            print "write: %s/img-%02d.jpg" % (os.getcwd(), i+1)
+            print "write: %s/match-%02d.jpg" % (os.getcwd(), i+1)
+
     cv2.imwrite("im1.jpg", im1)
     cv2.imwrite("im2.jpg", im2)
 
