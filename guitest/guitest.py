@@ -53,13 +53,11 @@ class MyCanvas(QGraphicsView):
                     if rect is self.capturingItem:
                         self.scene.removeItem(rect)
                         del(self.rectItems[i])
-                rect = self.scene.addRect(x-10, y-10, 20, 20)
+                rect = MyRectItem(x-10, y-10, 20, 20, parent=None, scene=self.scene)
                 self.rectItems.append(rect)
                 self.capturingItem = rect
         else: #self.isDragged == False:
             pass
-
-
 
         # 十字マウスポインタ
         for line in self.lineItems:
@@ -78,7 +76,7 @@ class MyCanvas(QGraphicsView):
         self.capturingItem = None
         self.capturingItems = self.scene.items(event.pos())
         for element in self.capturingItems:
-            if type(element) == QGraphicsRectItem:
+            if type(element) == MyRectItem:
                 self.capturingItem = element
         print self.capturingItems
         print self.capturingItem
@@ -89,13 +87,25 @@ class MyCanvas(QGraphicsView):
             self.isPressed = False
             self.isDragged = False
         else: #self.isDragged == False: 
-            rect = self.scene.addRect(x-10, y-10, 20, 20)
+            rect = MyRectItem(x-10, y-10, 20, 20, parent=None, scene=self.scene)
             self.rectItems.append(rect)
             self.isPressed = False
 
-class MyRect(QRect):
-    def __init__(self):
-        super(MyRect, self).__init__()
+class MyRectItem(QGraphicsRectItem):
+    def __init__(self, x, y, w, h, parent=None, scene=None):
+        super(MyRectItem, self).__init__(x, y, w, h, parent, scene)
+        self.setAcceptHoverEvents(True)
+        self.color_base = QColor(0, 0, 0)
+        self.color_hover = QColor(255, 0, 0)
+
+    def hoverEnterEvent(self, event):
+        print "Hovered!"
+        self.setPen(QPen(self.color_hover))
+        self.update()
+
+    def hoverLeaveEvent(self, event):
+        print "UnHovered!"
+
 
 def main():
     app = QApplication(sys.argv)
