@@ -100,18 +100,29 @@ class CanvasView(QGraphicsView):
 
     # called if FileAddButton pressed
     def imageFileAdd(self, filepath):
-        pixmap = QPixmap(filepath)
-        item = self.scene.addPixmap(pixmap)
-        self.imageitems.append(item)
+        #pixmap = QPixmap(filepath)
+        #pixmapItem = QGraphicsPixmapItem(pixmap)
+        #pixmapItem.setFlags(QGraphicsItem.ItemIsMovable)
+        #self.scene.addItem(pixmapItem)
+        #self.imageitems.append(pixmapItem)
+        transformableImageItem = TransformableImage(filepath)
+        transformableImageItem.setFlags(QGraphicsItem.ItemIsMovable)
+        self.scene.addItem(transformableImageItem)
 
     def mouseMoveEvent(self, event):
-        pass
+        super(CanvasView, self).mouseMoveEvent(event)
 
     def mousePressEvent(self, event):
-        pass
+        pointedItems =  self.items(event.pos())
+        for pointedItem in pointedItems:
+            if type(pointedItem) == QGraphicsRectItem:
+                print u"四角を掴みました"
+                return
+
+        super(CanvasView, self).mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
-        pass
+        super(CanvasView, self).mouseReleaseEvent(event)
 
 class CanvasScene(QGraphicsScene):
     def __init__(self, parent=None):
@@ -120,7 +131,62 @@ class CanvasScene(QGraphicsScene):
     def addImage(self, filepath):
         pass
 
-#class TransformableImage(QPixmap):
+class TransformableImage(QGraphicsItemGroup):
+    isPressed = False
+    isDragged = False
+
+    def __init__(self, filepath, parent=None):
+        super(TransformableImage, self).__init__(parent)
+
+        self.setAcceptHoverEvents(True)
+
+        # Create an image(base)
+        self.pixmapItem = QPixmap(filepath)
+        self.imageItem = QGraphicsPixmapItem(self.pixmapItem, self)
+
+        # Create an boundary polygon
+        self.imageShape = self.imageItem.shape()
+        self.imagePolygon = self.imageShape.toFillPolygon()
+        self.boundary  = QGraphicsPolygonItem(self.imagePolygon, self)
+
+        self.corners = [self.imagePolygon.at(i) for i in range(0, self.imagePolygon.count())]
+        self.anchors = [None for i in range(0,4)]
+
+        # Create four corner anchors(draggable) and add to self.anchors
+        self.anchors[0] = QGraphicsRectItem(\
+                self.corners[0].x()-5, self.corners[0].y()-5, 10, 10, self)
+        self.anchors[1] = QGraphicsRectItem(\
+                self.corners[1].x()-5, self.corners[1].y()-5, 10, 10, self)
+        self.anchors[2] = QGraphicsRectItem(\
+                self.corners[2].x()-5, self.corners[2].y()-5, 10, 10, self)
+        self.anchors[3] = QGraphicsRectItem(\
+                self.corners[3].x()-5, self.corners[3].y()-5, 10, 10, self)
+
+        # Style anchors
+        for anchor in self.anchors:
+            anchor.setPen( QColor(0, 0, 0) )
+            anchor.setBrush( QColor(255, 255, 255) )
+
+    def mouseMoveEvent(self, event):
+        super(TransformableImage, self).mouseMoveEvent(event)
+
+    def mousePressEvent(self, event):
+        self.isPressed = True
+        self.capturingItems = None
+        print event.pos().x(), event.pos().y()
+        super(TransformableImage, self).mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        super(TransformableImage, self).mouseReleaseEvent(event)
+
+#    def hoverEnterEvent(self, event):
+#        super(hoverEnterEvent, self).hoverEnterEvent(event)
+#        self.imagePolygon.setPen( QColor(255, 0, 0) )
+#
+#    def hoverLeaveEvent(self, event):
+#        super(hoverLeaveEvent, self).hoverLeaveEvent(event)
+#        self.imagePolygon.setPen( QColor(0, 0, 0) )
+
 
 def main():
     app = QApplication(sys.argv)
