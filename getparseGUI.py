@@ -89,7 +89,13 @@ class CanvasView(QGraphicsView):
     isPressed = False
     isDragged = False
 
-    imageitems = []
+    imageItems = []
+
+    pointedItems   = []
+    capturingItems = []
+    capturingItem  = None
+
+    x_origin, y_origin = None, None
 
     def __init__(self, parent=None):
         super(CanvasView, self).__init__(parent)
@@ -100,28 +106,37 @@ class CanvasView(QGraphicsView):
 
     # called if FileAddButton pressed
     def imageFileAdd(self, filepath):
-        #pixmap = QPixmap(filepath)
-        #pixmapItem = QGraphicsPixmapItem(pixmap)
-        #pixmapItem.setFlags(QGraphicsItem.ItemIsMovable)
-        #self.scene.addItem(pixmapItem)
-        #self.imageitems.append(pixmapItem)
         transformableImageItem = TransformableImage(filepath)
-        transformableImageItem.setFlags(QGraphicsItem.ItemIsMovable)
+        transformableImageItem.setFlags( \
+                QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
         self.scene.addItem(transformableImageItem)
+        self.imageItems.append(transformableImageItem)
 
     def mouseMoveEvent(self, event):
+        #if self.isPressed == True:
+        #    self.isDragged = True
+
+        #if self.capturingItem is not None:
+        #    print self.capturingItem.parentItem()
+        #    return
+
         super(CanvasView, self).mouseMoveEvent(event)
 
     def mousePressEvent(self, event):
-        pointedItems =  self.items(event.pos())
-        for pointedItem in pointedItems:
-            if type(pointedItem) == QGraphicsRectItem:
-                print u"四角を掴みました"
-                return
+        #self.isPressed = True
+
+        #self.pointedItems =  self.items(event.pos())
+        #for pointedItem in self.pointedItems:
+        #    if type(pointedItem) == QGraphicsRectItem:
+        #        self.capturingItem = pointedItem
+        #        return
 
         super(CanvasView, self).mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
+        #isPressed = False
+        #isDragged = False
+        #self.capturingItem = None
         super(CanvasView, self).mouseReleaseEvent(event)
 
 class CanvasScene(QGraphicsScene):
@@ -134,6 +149,8 @@ class CanvasScene(QGraphicsScene):
 class TransformableImage(QGraphicsItemGroup):
     isPressed = False
     isDragged = False
+    capturingItems = []
+    capturingItem = None
 
     def __init__(self, filepath, parent=None):
         super(TransformableImage, self).__init__(parent)
@@ -153,13 +170,13 @@ class TransformableImage(QGraphicsItemGroup):
         self.anchors = [None for i in range(0,4)]
 
         # Create four corner anchors(draggable) and add to self.anchors
-        self.anchors[0] = QGraphicsRectItem(\
+        self.anchors[0] = QGraphicsRectItem( \
                 self.corners[0].x()-5, self.corners[0].y()-5, 10, 10, self)
-        self.anchors[1] = QGraphicsRectItem(\
+        self.anchors[1] = QGraphicsRectItem( \
                 self.corners[1].x()-5, self.corners[1].y()-5, 10, 10, self)
-        self.anchors[2] = QGraphicsRectItem(\
+        self.anchors[2] = QGraphicsRectItem( \
                 self.corners[2].x()-5, self.corners[2].y()-5, 10, 10, self)
-        self.anchors[3] = QGraphicsRectItem(\
+        self.anchors[3] = QGraphicsRectItem( \
                 self.corners[3].x()-5, self.corners[3].y()-5, 10, 10, self)
 
         # Style anchors
@@ -172,12 +189,15 @@ class TransformableImage(QGraphicsItemGroup):
 
     def mousePressEvent(self, event):
         self.isPressed = True
-        self.capturingItems = None
-        print event.pos().x(), event.pos().y()
+        self.capturingItems = []
         super(TransformableImage, self).mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
         super(TransformableImage, self).mouseReleaseEvent(event)
+
+    # Move one anchor point to offset value
+    def moveAnchor(anchorItem, point):
+        pass
 
 #    def hoverEnterEvent(self, event):
 #        super(hoverEnterEvent, self).hoverEnterEvent(event)
