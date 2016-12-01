@@ -103,6 +103,10 @@ class CanvasView(QGraphicsView):
         self.setScene(self.scene)
 
         self.setMouseTracking(True)
+        self.contextMenu = QMenu();
+        self.contextMenuAction1 = self.contextMenu.addAction("Delete item")
+
+        self.connect(self.contextMenuAction1, SIGNAL('triggered()'), self.imageDelete)
 
     # called if FileAddButton pressed
     def imageFileAdd(self, filepath):
@@ -111,6 +115,14 @@ class CanvasView(QGraphicsView):
                 QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
         self.scene.addItem(transformableImageItem)
         self.imageItems.append(transformableImageItem)
+
+    # called if contextMenuAction1 "Delete item" pressed
+    def imageDelete(self):
+        for (i, imageItem) in enumerate(self.imageItems):
+            if imageItem is self.capturingItem:
+                self.scene.removeItem(self.capturingItem)
+                del(self.imageItems[i])
+
 
     def mouseMoveEvent(self, event):
         #if self.isPressed == True:
@@ -139,6 +151,15 @@ class CanvasView(QGraphicsView):
         #self.capturingItem = None
         super(CanvasView, self).mouseReleaseEvent(event)
 
+    def contextMenuEvent(self, event):
+        self.capturingItems = self.scene.items(self.mapToScene(event.pos()))
+        self.capturingItem = self.capturingItems[0].group()
+
+        self.contextMenu.exec_(self.mapToGlobal(event.pos()))
+
+        self.capturingItems = []
+        self.capturingItem = None
+
 class CanvasScene(QGraphicsScene):
     def __init__(self, parent=None):
         super(CanvasScene, self).__init__(parent)
@@ -164,25 +185,31 @@ class TransformableImage(QGraphicsItemGroup):
         # Create an boundary polygon
         self.imageShape = self.imageItem.shape()
         self.imagePolygon = self.imageShape.toFillPolygon()
-        self.boundary  = QGraphicsPolygonItem(self.imagePolygon, self)
+        self.boundaryItem  = QGraphicsPolygonItem(self.imagePolygon, self)
 
         self.corners = [self.imagePolygon.at(i) for i in range(0, self.imagePolygon.count())]
-        self.anchors = [None for i in range(0,4)]
+        self.anchorItems = [None for i in range(0,4)]
 
         # Create four corner anchors(draggable) and add to self.anchors
-        self.anchors[0] = QGraphicsRectItem( \
+        self.anchorItems[0] = QGraphicsRectItem( \
                 self.corners[0].x()-5, self.corners[0].y()-5, 10, 10, self)
-        self.anchors[1] = QGraphicsRectItem( \
+        self.anchorItems[1] = QGraphicsRectItem( \
                 self.corners[1].x()-5, self.corners[1].y()-5, 10, 10, self)
-        self.anchors[2] = QGraphicsRectItem( \
+        self.anchorItems[2] = QGraphicsRectItem( \
                 self.corners[2].x()-5, self.corners[2].y()-5, 10, 10, self)
-        self.anchors[3] = QGraphicsRectItem( \
+        self.anchorItems[3] = QGraphicsRectItem( \
                 self.corners[3].x()-5, self.corners[3].y()-5, 10, 10, self)
 
         # Style anchors
-        for anchor in self.anchors:
+        for anchor in self.anchorItems:
             anchor.setPen( QColor(0, 0, 0) )
             anchor.setBrush( QColor(255, 255, 255) )
+
+        # Add any child items to group
+        self.addToGroup(self.imageItem)
+        self.addToGroup(self.boundaryItem)
+        for anchorItem in self.anchorItems:
+            self.addToGroup(anchorItem)
 
     def mouseMoveEvent(self, event):
         super(TransformableImage, self).mouseMoveEvent(event)
