@@ -91,11 +91,12 @@ class CanvasView(QGraphicsView):
 
     imageItems = []
 
-    pointedItems   = []
-    capturingItems = []
-    capturingItem  = None
+    capturedItems = []
+    capturedItem  = None
 
-    x_origin, y_origin = None, None
+    currentPos   = None
+    x0, y0       = None, None
+    xdiff, ydiff = None, None
 
     def __init__(self, parent=None):
         super(CanvasView, self).__init__(parent)
@@ -125,30 +126,43 @@ class CanvasView(QGraphicsView):
 
 
     def mouseMoveEvent(self, event):
-        #if self.isPressed == True:
-        #    self.isDragged = True
+        if self.isPressed == True:
+            self.isDragged = True
+            self.currentPos = event.pos()
+            x, y = self.currentPos.x(), self.currentPos.y()
 
-        #if self.capturingItem is not None:
-        #    print self.capturingItem.parentItem()
-        #    return
+        if type(self.capturedItem) is QGraphicsRectItem and \
+           type(self.capturedItem.group()) is TransformableImage:
+            self.xdiff, self.ydiff = x - self.x0, y - self.y0
+            self.capturedItem.group().moveAnchor(self.capturedItem, self.xdiff, self.ydiff)
+            self.x0, self.y0 = x, y
+            return
 
         super(CanvasView, self).mouseMoveEvent(event)
 
     def mousePressEvent(self, event):
-        #self.isPressed = True
+        self.isPressed = True
+        self.xdiff, self.ydiff = 0, 0
+        
+        self.currentPos = event.pos()
+        self.x0, self.y0 = self.currentPos.x(), self.currentPos.y()
 
-        #self.pointedItems =  self.items(event.pos())
-        #for pointedItem in self.pointedItems:
-        #    if type(pointedItem) == QGraphicsRectItem:
-        #        self.capturingItem = pointedItem
-        #        return
+        self.capturedItems =  self.items(event.pos())
+        for capturedItem in self.capturedItems:
+            if type(capturedItem) == QGraphicsRectItem:
+                self.capturedItem = capturedItem
+                return
 
+        # Default Action
         super(CanvasView, self).mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
-        #isPressed = False
-        #isDragged = False
-        #self.capturingItem = None
+        isPressed = False
+        isDragged = False
+        self.capturedItem = None
+        self.xdiff, self.ydiff = None, None
+
+        # Default Action
         super(CanvasView, self).mouseReleaseEvent(event)
 
     def contextMenuEvent(self, event):
@@ -191,19 +205,16 @@ class TransformableImage(QGraphicsItemGroup):
         self.anchorItems = [None for i in range(0,4)]
 
         # Create four corner anchors(draggable) and add to self.anchors
-        self.anchorItems[0] = QGraphicsRectItem( \
-                self.corners[0].x()-5, self.corners[0].y()-5, 10, 10, self)
-        self.anchorItems[1] = QGraphicsRectItem( \
-                self.corners[1].x()-5, self.corners[1].y()-5, 10, 10, self)
-        self.anchorItems[2] = QGraphicsRectItem( \
-                self.corners[2].x()-5, self.corners[2].y()-5, 10, 10, self)
-        self.anchorItems[3] = QGraphicsRectItem( \
-                self.corners[3].x()-5, self.corners[3].y()-5, 10, 10, self)
+        for i in range(0, 4):
+            self.anchorItems[i] = \
+                    QGraphicsRectItem(self.corners[i].x()-5, self.corners[i].y()-5, 10, 10, self)
 
         # Style anchors
-        for anchor in self.anchorItems:
-            anchor.setPen( QColor(0, 0, 0) )
-            anchor.setBrush( QColor(255, 255, 255) )
+        for anchorItem in self.anchorItems:
+            anchorItem.setPen( QColor(0, 0, 0) )
+            anchorItem.setBrush( QColor(255, 255, 255) )
+        # Style boundary
+        self.boundaryItem.setPen( QColor(255, 0, 0) )
 
         # Add any child items to group
         self.addToGroup(self.imageItem)
@@ -215,16 +226,36 @@ class TransformableImage(QGraphicsItemGroup):
         super(TransformableImage, self).mouseMoveEvent(event)
 
     def mousePressEvent(self, event):
-        self.isPressed = True
-        self.capturingItems = []
         super(TransformableImage, self).mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
         super(TransformableImage, self).mouseReleaseEvent(event)
 
-    # Move one anchor point to offset value
-    def moveAnchor(anchorItem, point):
-        pass
+    # Move one anchor point to offset(xdiff, ydiff) value
+    def moveAnchor(self, passedAnchorItem, xdiff, ydiff):
+        # Find Index of passedAnchorItem in self.anchorItems
+        for (i, anchorItem) in enumerate(self.anchorItems):
+            if anchorItem is passedAnchorItem:
+                capturedAnchor = anchorItem
+                capturedAnchorIdx = i
+
+        # Move Anchor(QGraphicsRectItem)
+        currentAnchorPos = (capturedAnchor.pos().x(), capturedAnchor.pos().y())
+        capturedAnchor.setPos(currentAnchorPos[0] + xdiff, currentAnchorPos[1] + ydiff)
+
+        # Change Shape of ImagePolygon(QGraphicsPolygonItem)
+        currentCornerPos = (self.corners[capturedAnchorIdx].x(), self.corners[capturedAnchorIdx].y() )
+        newCornerPos = QPointF(currentCornerPos[0] + xdiff, currentCornerPos[1] + ydiff)
+        self.imagePolygon.replace(capturedAnchorIdx, newCornerPos)
+        self.corners[capturedAnchorIdx] = self.imagePolygon.at(capturedAnchorIdx)
+
+        # If anchor was origin point(#0), also apply to terminal point(#4)
+        if capturedAnchorIdx == 0:
+            self.imagePolygon.replace(4, newCornerPos)
+            self.corners[4] = self.imagePolygon.at(capturedAnchorIdx)
+
+        # Reapply Polygon to self.boundaryItem(QGraphicsPolygonItem)
+        self.boundaryItem.setPolygon(self.imagePolygon)
 
 #    def hoverEnterEvent(self, event):
 #        super(hoverEnterEvent, self).hoverEnterEvent(event)
