@@ -183,6 +183,13 @@ class CanvasScene(QGraphicsScene):
     def addImage(self, filepath):
         pass
 
+"""
+  class TransformableImage
+    Group Object of Pixmap(Image), Matrix(Transform), Boundary(Polygon), Anchor(Rect)
+    Inherited from QGraphicsItemGroup
+    ピクスマップ、変換行列、境界線、アンカーポイントを含んだ
+    QGraphicsItemGroupベースのグループクラス
+"""
 class TransformableImage(QGraphicsItemGroup):
     isPressed = False
     isDragged = False
@@ -241,9 +248,6 @@ class TransformableImage(QGraphicsItemGroup):
     def mouseReleaseEvent(self, event):
         super(TransformableImage, self).mouseReleaseEvent(event)
 
-    def transform(self):
-        pass
-
     # Move one anchor point to offset(xdiff, ydiff) value
     def moveAnchor(self, passedAnchorItem, xdiff, ydiff):
         # Find Index of passedAnchorItem in self.anchorItems
@@ -251,6 +255,8 @@ class TransformableImage(QGraphicsItemGroup):
             if anchorItem is passedAnchorItem:
                 capturedAnchor = anchorItem
                 capturedAnchorIdx = i
+                print "capturedAnchor.pos(): ", capturedAnchor.pos()
+                print "TransformableImage.corners[capturedAnchorIdx]: ", self.corners[capturedAnchorIdx]
 
         # Move Anchor(QGraphicsRectItem)
         currentAnchorPos = (capturedAnchor.pos().x(), capturedAnchor.pos().y())
@@ -272,15 +278,21 @@ class TransformableImage(QGraphicsItemGroup):
 
         # kari---
         self.cornersInitNumpy = np.float32([[corner.x(), corner.y()] for corner in self.cornersInit])
-        print self.cornersInitNumpy
+        print "TransformaleImage.cornersInitNumpy:\n", self.cornersInitNumpy
         self.cornersAfterNumpy = np.float32([[corner.x(), corner.y()] for corner in self.corners])
-        print self.cornersAfterNumpy
+        print "TransformableImage.cornersAfterNumpy:\n", self.cornersAfterNumpy
 
         self.H, self.inliers = cv2.findHomography(self.cornersInitNumpy, self.cornersAfterNumpy)
-        print self.H
+        print "TransformableImage.H:\n", self.H
         self.transformMatrix.setMatrixInNumpy(self.H)
         self.transformedPixmapItem = self.pixmapItem.transformed(self.transformMatrix)
         self.imageItem.setPixmap(self.transformedPixmapItem)
+        print "TransformedPixmap: x=%4d, y=%4d" % \
+                (self.transformedPixmapItem.width(), self.transformedPixmapItem.height())
+        offset_x = min(list(self.cornersAfterNumpy[:,0]))
+        offset_y = min(list(self.cornersAfterNumpy[:,1]))
+        self.imageItem.setOffset(offset_x, offset_y)
+        print "TransformableImage.pixmapItem.offset: ", self.imageItem.offset()
 
         
         
@@ -294,7 +306,7 @@ class TransformableImage(QGraphicsItemGroup):
 #        self.imagePolygon.setPen( QColor(0, 0, 0) )
 
 """ 
-  Class QTransformWithNumpy:
+  class QTransformWithNumpy:
     QTransform Class with utilities for using in Numpy representation
     QTransformクラスにNumpy形式で使うためのユーティリティを実装したクラス
 """
