@@ -6,6 +6,8 @@
 import sys
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
+import numpy as np
+import cv2
 
 class MyWindow(QMainWindow):
     def __init__(self):
@@ -196,12 +198,19 @@ class TransformableImage(QGraphicsItemGroup):
         self.pixmapItem = QPixmap(filepath)
         self.imageItem = QGraphicsPixmapItem(self.pixmapItem, self)
 
+        self.transformMatrix = QTransformWithNumpy()
+        self.transformedPixmapItem = self.pixmapItem.transformed(self.transformMatrix)
+        self.imageItem.setPixmap(self.transformedPixmapItem)
+
         # Create an boundary polygon
         self.imageShape = self.imageItem.shape()
         self.imagePolygon = self.imageShape.toFillPolygon()
         self.boundaryItem  = QGraphicsPolygonItem(self.imagePolygon, self)
 
         self.corners = [self.imagePolygon.at(i) for i in range(0, self.imagePolygon.count())]
+        # Create copy of self.corners(used in calculating homography matrix)
+        self.cornersInit = self.corners[:]
+        # Initialize empty list of each anchors
         self.anchorItems = [None for i in range(0,4)]
 
         # Create four corner anchors(draggable) and add to self.anchors
@@ -218,6 +227,7 @@ class TransformableImage(QGraphicsItemGroup):
 
         # Add any child items to group
         self.addToGroup(self.imageItem)
+        #self.addToGroup(self.transformedPixmapItem)
         self.addToGroup(self.boundaryItem)
         for anchorItem in self.anchorItems:
             self.addToGroup(anchorItem)
@@ -230,6 +240,9 @@ class TransformableImage(QGraphicsItemGroup):
 
     def mouseReleaseEvent(self, event):
         super(TransformableImage, self).mouseReleaseEvent(event)
+
+    def transform(self):
+        pass
 
     # Move one anchor point to offset(xdiff, ydiff) value
     def moveAnchor(self, passedAnchorItem, xdiff, ydiff):
@@ -257,6 +270,21 @@ class TransformableImage(QGraphicsItemGroup):
         # Reapply Polygon to self.boundaryItem(QGraphicsPolygonItem)
         self.boundaryItem.setPolygon(self.imagePolygon)
 
+        # kari---
+        self.cornersInitNumpy = np.float32([[corner.x(), corner.y()] for corner in self.cornersInit])
+        print self.cornersInitNumpy
+        self.cornersAfterNumpy = np.float32([[corner.x(), corner.y()] for corner in self.corners])
+        print self.cornersAfterNumpy
+
+        self.H, self.inliers = cv2.findHomography(self.cornersInitNumpy, self.cornersAfterNumpy)
+        print self.H
+        self.transformMatrix.setMatrixInNumpy(self.H)
+        self.transformedPixmapItem = self.pixmapItem.transformed(self.transformMatrix)
+        self.imageItem.setPixmap(self.transformedPixmapItem)
+
+        
+        
+
 #    def hoverEnterEvent(self, event):
 #        super(hoverEnterEvent, self).hoverEnterEvent(event)
 #        self.imagePolygon.setPen( QColor(255, 0, 0) )
@@ -264,6 +292,37 @@ class TransformableImage(QGraphicsItemGroup):
 #    def hoverLeaveEvent(self, event):
 #        super(hoverLeaveEvent, self).hoverLeaveEvent(event)
 #        self.imagePolygon.setPen( QColor(0, 0, 0) )
+
+""" 
+  Class QTransformWithNumpy:
+    QTransform Class with utilities for using in Numpy representation
+    QTransformクラスにNumpy形式で使うためのユーティリティを実装したクラス
+"""
+class QTransformWithNumpy(QTransform):
+    def __init__(self):
+        super(QTransformWithNumpy, self).__init__()
+        self.matrix_NumpyFloat32 = np.zeros([3,3], dtype=np.float32)
+        self.matrix_NumpyFloat32 = self.inNumpyFloat32()
+
+
+    def reset(self):
+        self.setMatrix(1.0, 0.0, 0.0, \
+                       0.0, 1.0, 0.0, \
+                       0.0, 0.0, 1.0)
+
+    # function inNumpy(): returns QTransform in numpy.float32 representation
+    def inNumpyFloat32(self):
+        self.matrix_NumpyFloat32 = np.float32([[self.m11(), self.m12(), self.m13()], \
+                                               [self.m21(), self.m22(), self.m23()], \
+                                               [self.m31(), self.m32(), self.m33()]] )
+        return self.matrix_NumpyFloat32
+
+    # function
+    def setMatrixInNumpy(self, matrix):
+        if matrix.shape == (3,3):
+            self.setMatrix( matrix[0,0], matrix[1,0], matrix[2,0], \
+                            matrix[0,1], matrix[1,1], matrix[2,1], \
+                            matrix[0,2], matrix[1,2], matrix[2,2]  )
 
 
 def main():
