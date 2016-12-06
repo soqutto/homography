@@ -18,13 +18,15 @@ class MyWindow(QMainWindow):
         self.widget = QWidget(self)
 
         # Widget Object
-        self.inputwidget = ImageInputWidget(self)
-        self.canvaswidget = CanvasWidget(self)
+        self.inputWidget = ImageInputWidget(self)
+        self.attributionWidget = ImageAttributionWidget(self)
+        self.canvasWidget = CanvasWidget(self)
 
         # Layout Object
         self.layout = QVBoxLayout(self)
-        self.layout.addWidget(self.inputwidget)
-        self.layout.addWidget(self.canvaswidget)
+        self.layout.addWidget(self.inputWidget)
+        self.layout.addWidget(self.attributionWidget)
+        self.layout.addWidget(self.canvasWidget)
 
         self.widget.setLayout(self.layout)
         self.setCentralWidget(self.widget)
@@ -70,6 +72,31 @@ class ImageInputWidget(QWidget):
     def imageFileAdd(self):
         self.parent().findChild(CanvasView).imageFileAdd(self.input_path)
 
+class ImageAttributionWidget(QWidget):
+    def __init__(self, parent=None):
+        super(ImageAttributionWidget, self).__init__(parent)
+
+        # Widget Parts
+        self.Label = QLabel("Opacity:")
+        self.Slider = QSlider(Qt.Horizontal, self)
+
+        # Configure Slider
+        self.Slider.setMaximum(100)
+        self.Slider.setMinimum(  0)
+
+        # Layout Object
+        self.layout = QHBoxLayout(self)
+        self.layout.addWidget(self.Label)
+        self.layout.addWidget(self.Slider)
+
+        # Connect Slider to signal
+        self.connect(self.Slider, SIGNAL('sliderMoved(int)'), self.OpacitySliderChanged)
+
+    def OpacitySliderChanged(self):
+        pass
+
+    def setOpacitySlider(self, opacityFloat):
+        self.Slider.setValue(opacityFloat * 100)
 
 
 class CanvasWidget(QWidget):
@@ -289,8 +316,10 @@ class TransformableImage(QGraphicsItemGroup):
         self.imageItem.setPixmap(self.transformedPixmapItem)
         print "TransformedPixmap: x=%4d, y=%4d" % \
                 (self.transformedPixmapItem.width(), self.transformedPixmapItem.height())
-        offset_x = min(list(self.cornersAfterNumpy[:,0]))
-        offset_y = min(list(self.cornersAfterNumpy[:,1]))
+
+        # Determine offsets to minimal x/y value in the item
+        offset_x = np.min(self.cornersAfterNumpy[:,0])
+        offset_y = np.min(self.cornersAfterNumpy[:,1])
         self.imageItem.setOffset(offset_x, offset_y)
         print "TransformableImage.pixmapItem.offset: ", self.imageItem.offset()
 
