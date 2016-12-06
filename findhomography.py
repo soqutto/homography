@@ -61,7 +61,7 @@ def image_trim(image, p1, p2):
     return image[p1[1]:p2[1], p1[0]:p2[0]]
 
 # パノラマ合成関数
-def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForce-Hamming', threshold_ratio=1.0):
+def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForce-Hamming', threshold_ratio=1.0, k=1):
     # 画像のモノクロ化
     im1_gray = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
     im2_gray = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
@@ -128,12 +128,33 @@ def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForc
     k2, d2 = descriptor.compute(im2_gray, kp2)
     
     # match the keypoints
-    matches = keypointmatcher.match(d1, d2)
+    if k == 1:
+        # 通常の1対1マッチング
+        matches = keypointmatcher.match(d1, d2)
+        # 距離リスト取得
+        dist = [m.distance for m in matches]
+
+    elif k >= 2:
+        # knnMatchによる1対多マッチング
+        match_temp = keypointmatcher.knnMatch(d1, d2, k)
+
+        # NNDRによる取捨処理
+        matches = []
+        nndr_ratio = 0.8
+        for m in match_temp:
+            if m[0].distance < nndr_ratio * m[1].distance:
+                matches.append(m[0])
+        # 距離リスト取得
+        dist = [m.distance for m in matches]
+
+    else:
+        sys.exit("Invalid k Value.")
+
+
 
     print "#keypoints in image1: {0}, image2: {1}".format(len(k1), len(k2))
     print "#keypoints in image1: {0}, image2: {1}".format(len(d1), len(d2))
     print "#matches:", len(matches)
-    dist = [m.distance for m in matches]
     
     print "distance_min: %.3f" % min(dist)
     print "distance_mean: %.3f" % (sum(dist)/len(dist))
@@ -270,8 +291,8 @@ def main():
     im2 = cv2.imread(im2_path)
     im1 = cv2.resize(im1, compute_resize(im1))
     im2 = cv2.resize(im2, compute_resize(im2))
-    im1 = image_trim(im1, (220,160), (524,557))
-    im2 = image_trim(im2, (  0,100), (331,497))
+    #im1 = image_trim(im1, (220,160), (524,557))
+    #im2 = image_trim(im2, (  0,100), (331,497))
 
     #dst, match = composite_panorama( \
     #        im1, im2, 'SURF', 'BRIEF', 'BruteForce-Hamming', 1.3)
@@ -283,11 +304,11 @@ def main():
     # マッチングしきい値変化実験イテレータ
 
     # 画像保存ディレクトリの定義
-    os.chdir("experiment/threshold_flower_sift_Ycutoff")
+    os.chdir("experiment/threshold_flower_surf_nndr_Ycutoff_nontrim")
 
     for i in range(0,30):
         dst, match = composite_panorama( \
-             im1, im2, 'SIFT', 'BRIEF', 'BruteForce-Hamming', 0.1+0.1*i)
+             im1, im2, 'SURF', 'BRIEF', 'BruteForce-Hamming', 0.1+0.1*i, k=2)
         if dst is not None:
             dst2 = draw_match(im1, im2, match)
             cv2.imwrite("img-%02d.jpg" % (i+1), dst)
@@ -295,15 +316,19 @@ def main():
             print "write: %s/img-%02d.jpg" % (os.getcwd(), i+1)
             print "write: %s/match-%02d.jpg" % (os.getcwd(), i+1)
 
+
     cv2.imwrite("im1.jpg", im1)
     cv2.imwrite("im2.jpg", im2)
 
     #cv2.imshow("image1", im1)
     #cv2.imshow("image2", im2)
-    cv2.imshow("result", dst)
-    cv2.imshow("result2", dst2)
-    cv2.waitKey()
-    cv2.destroyAllWindows()
+    if dst is not None:
+        cv2.imshow("result", dst)
+        cv2.imshow("result2", dst2)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
+    else:
+        sys.exit("No Matched Pairs.")
 
 if __name__ == '__main__':
     main()
