@@ -17,7 +17,7 @@ IMAGE_MAX_YSIZE = 1000
 # マッチング点対をクラスとして再定義
 
 class MyMatch:
-    def __init__(self, point1, point2, distance, inlier):
+    def __init__(self, point1, point2, distance, inlier=[1]):
         # コンストラクタ
         # 引数: 点1, 点2, 距離, インライア
         self.point1 = point1
@@ -40,6 +40,20 @@ class MyMatch:
         # その対応について強制的に無効(アウトライア)にする
         self.inlier = 0
 
+    def setPoint(self, index, x=None, y=None):
+        # その対応の座標位置を強制的に書き換える
+        # index=1でpoint1, index=2でpoint2を書き換える
+        if index == 1:
+            p = self.point1
+        elif index == 2:
+            p = self.point2
+        else:
+            return
+
+        if x is not None:
+            p[0] = x
+        if y is not None:
+            p[1] = y
 
 
 # リサイズの計算
@@ -204,12 +218,16 @@ def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForc
 
     print "#selected matches(Y-subtraction over vertices were excluded): %d" % len(point1)
 
-    point1 = np.array(point1)
-    point2 = np.array(point2)
+    # MyMatchリストを作成
+    matches = [ MyMatch(p1, p2, d) for (p1, p2, d) \
+            in zip(point1, point2, dist_table) ]
+
 
     # H: ホモグラフィ行列
     # Hstatus: RANSACにより取捨選択された点のマスク[0,1]
-    H, Hstatus = cv2.findHomography(point2, point1, cv2.RANSAC)
+    #H, Hstatus = cv2.findHomography(point2, point1, cv2.RANSAC)
+    H, Hstatus = cv2.findHomography(\
+            np.float32([m.point2 for m in matches]), np.float32([m.point1 for m in matches]), cv2.RANSAC)
 
     # インライアの数を計算
     num_inliers = np.count_nonzero(Hstatus)
@@ -217,18 +235,33 @@ def composite_panorama(im1, im2, method='SURF', desc='BRIEF', matcher='BruteForc
     print "#selected matches(inliers): %d" % num_inliers
     print "#selected matches(outliers): %d" % (len(point1) - num_inliers)
 
-    # MyMatchリストを作成
-    matches = [ MyMatch(p1, p2, d, stat) for (p1, p2, d, stat) \
-            in zip(point1, point2, dist_table, Hstatus) ]
+    for (i,(m, inl)) in enumerate(zip(matches, Hstatus)):
+        if inl == [1]:
+            m.enable()
+            print i, m.point1, m.point2, m.distance, m.inlier
+        elif inl == [0]:
+            m.disable()
+
+    # 手動指定
+
+    for (i,m) in enumerate(matches):
+        print i, m.point1, m.point2, m.distance, m.inlier
+
+
+    # ホモグラフィ行列再計算
+    H2, Hstatus2 = cv2.findHomography(\
+            np.float32([m.point2 for m in matches if m.inlier == 1]),\
+            np.float32([m.point1 for m in matches if m.inlier == 1]))
+
 
     # 移動量を算出
     x = 0
     y = 0
     cnt = 0
-    for i,v in enumerate(Hstatus):
+    for i,v in enumerate(Hstatus2):
         if v == 1:
-            x += point1[i][0] - point2[i][0]
-            y += point1[i][1] - point2[i][1]
+            x += matches[i].point1[0] - matches[i].point2[0]
+            y += matches[i].point1[1] - matches[i].point2[1]
             cnt += 1
     
     x = abs(int(round(x/cnt)))
