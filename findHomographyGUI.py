@@ -33,6 +33,8 @@ class MyWindow(QMainWindow):
         # Layout Object (Right Side)
         self.layout_right = QVBoxLayout(self)
         self.layout_right.addWidget(self.matchingWidget)
+        self.matchingWidget.setMaximumWidth(420)
+        self.matchingWidget.setMinimumWidth(300)
 
         # Layout Object (Parent Frame)
         self.layout_frame = QHBoxLayout(self)
@@ -51,25 +53,32 @@ class ImageInputWidget(QWidget):
         super(ImageInputWidget, self).__init__(parent)
 
         # Widget Parts
-        self.Label = QLabel("Input File:")
-        self.InputBox = QLineEdit()
-        self.FileDialogButton = QPushButton("...", self)
-        self.FileAddButton = QPushButton(" + ", self)
+        self.labelFile = QLabel("Input File:")
+        self.inputBox = QLineEdit()
+        self.fileDialogButton = QPushButton("...", self)
+        self.fileAddButton = QPushButton(" + ", self)
+        self.labelTo = QLabel("To:")
+        self.comboBox = QComboBox(self)
 
+        # ComboBox Setting (specify side of image)
+        self.comboBox.addItem("Left")
+        self.comboBox.addItem("Right")
 
         # Layout Object
         self.layout = QHBoxLayout(self)
-        self.layout.addWidget(self.Label)
-        self.layout.addWidget(self.InputBox)
-        self.layout.addWidget(self.FileDialogButton)
-        self.layout.addWidget(self.FileAddButton)
+        self.layout.addWidget(self.labelFile)
+        self.layout.addWidget(self.inputBox)
+        self.layout.addWidget(self.fileDialogButton)
+        self.layout.addWidget(self.fileAddButton)
+        self.layout.addWidget(self.labelTo)
+        self.layout.addWidget(self.comboBox)
 
         # Widget Object
         self.setLayout(self.layout)
 
         # Connect buttons to signals
-        self.connect(self.FileDialogButton, SIGNAL('clicked()'), self.filedialog_open)
-        self.connect(self.FileAddButton, SIGNAL('clicked()'), self.imageFileAdd)
+        self.connect(self.fileDialogButton, SIGNAL('clicked()'), self.filedialog_open)
+        self.connect(self.fileAddButton, SIGNAL('clicked()'), self.imageFileAdd)
 
 
     # called if FileDialogButton pressed
@@ -78,7 +87,7 @@ class ImageInputWidget(QWidget):
         self.input_path = QFileDialog.getOpenFileName( \
                 self, "Select Image File:", ".", "Image Files (*.jpg *.png)")
         if (self.input_path != ""):
-            self.InputBox.setText(self.input_path)
+            self.inputBox.setText(self.input_path)
 
     def imageFileAdd(self):
         self.parent().findChild(CanvasView).imageFileAdd(self.input_path)
@@ -131,36 +140,88 @@ class MatchingControlWidget(QWidget):
         super(MatchingControlWidget, self).__init__(parent)
 
         # Layouts and Widgets Initialize
-        self.layout_frame = QVBoxLayout(self)
+        self.frameLayout = QVBoxLayout(self)
 
-        self.groupBox1 = QGroupBox("Matching Option")
-        self.groupBox1_grid = QGridLayout(self.groupBox1)
-        self.groupBox1.setLayout(self.groupBox1_grid)
-        self.layout_frame.addWidget(self.groupBox1)
+        #-------------------------------------------------------
+        # Matching Parameter Section
+        # GroupBox
+        #-------------------------------------------------------
+        self.paramGroupBox = QGroupBox("Matching Option")
+        self.paramGroupBox_grid = QGridLayout(self.paramGroupBox)
+        self.paramGroupBox.setLayout(self.paramGroupBox_grid)
+        self.frameLayout.addWidget(self.paramGroupBox)
 
         # Threshold control
-        self.groupBox1_label1 = QLabel("Distance Threshold:")
-        self.slider1 = QSlider(Qt.Horizontal, self)
-        self.svalue1 = QLabel("0.0")
-        self.groupBox1_grid.addWidget(self.groupBox1_label1, 0, 0)
-        self.groupBox1_grid.addWidget(self.slider1, 0, 1)
-        self.groupBox1_grid.addWidget(self.svalue1, 0, 2)
+        self.paramGroupBox_label1 = QLabel("Distance Threshold:")
+        self.paramSlider1 = QSlider(Qt.Horizontal, self)
+        self.paramSlider1.setMaximum(1000)
+        self.paramSlider1.setMinimum(   0)
+        self.svalue1 = QLabel(" 0.0")
+        self.paramSlider1.setTracking(True)
+        self.paramGroupBox_grid.addWidget(self.paramGroupBox_label1, 0, 0)
+        self.paramGroupBox_grid.addWidget(self.paramSlider1, 0, 1)
+        self.paramGroupBox_grid.addWidget(self.svalue1, 0, 2)
+        self.connect(self.paramSlider1, SIGNAL('sliderMoved(int)'), self.distanceSliderChanged)
 
         # NNDR Threshold control
-        self.groupBox1_label2 = QLabel("NNDR Threshold:")
-        self.slider2 = QSlider(Qt.Horizontal, self)
-        self.svalue2 = QLabel("0.0")
-        self.groupBox1_grid.addWidget(self.groupBox1_label2, 1, 0)
-        self.groupBox1_grid.addWidget(self.slider2, 1, 1)
-        self.groupBox1_grid.addWidget(self.svalue2, 1, 2)
+        self.paramGroupBox_label2 = QLabel("NNDR Threshold:")
+        self.paramSlider2 = QSlider(Qt.Horizontal, self)
+        self.paramSlider2.setMaximum(100)
+        self.paramSlider2.setMinimum(  0)
+        self.svalue2 = QLabel("0.00")
+        self.paramSlider2.setTracking(True)
+        self.paramGroupBox_grid.addWidget(self.paramGroupBox_label2, 1, 0)
+        self.paramGroupBox_grid.addWidget(self.paramSlider2, 1, 1)
+        self.paramGroupBox_grid.addWidget(self.svalue2, 1, 2)
+        self.connect(self.paramSlider2, SIGNAL('sliderMoved(int)'), self.nndrSliderChanged)
 
         # Y limitation control
-        self.groupBox1_label3 = QLabel("Y limitation:")
-        self.slider3 = QSlider(Qt.Horizontal, self)
-        self.svalue3 = QLabel("0.0")
-        self.groupBox1_grid.addWidget(self.groupBox1_label3, 2, 0)
-        self.groupBox1_grid.addWidget(self.slider3, 2, 1)
-        self.groupBox1_grid.addWidget(self.svalue3, 2, 2)
+        self.paramGroupBox_label3 = QLabel("Y limitation:")
+        self.paramSlider3 = QSlider(Qt.Horizontal, self)
+        self.paramSlider3.setMaximum(100)
+        self.paramSlider3.setMinimum(  0)
+        self.svalue3 = QLabel("0.00")
+        self.paramSlider3.setTracking(True)
+        self.paramGroupBox_grid.addWidget(self.paramGroupBox_label3, 2, 0)
+        self.paramGroupBox_grid.addWidget(self.paramSlider3, 2, 1)
+        self.paramGroupBox_grid.addWidget(self.svalue3, 2, 2)
+        self.connect(self.paramSlider3, SIGNAL('sliderMoved(int)'), self.limitSliderChanged)
+
+        #-------------------------------------------------------
+        # Matching Execution Section
+        # Buttons
+        #-------------------------------------------------------
+        self.MatchingExecutionLayout = QGridLayout(self)
+        self.frameLayout.addLayout(self.MatchingExecutionLayout)
+
+        # Matching Execution Button
+        self.execButton1 = QPushButton("Match", self)
+        self.MatchingExecutionLayout.addWidget(self.execButton1, 0, 0)
+
+        # Concatenate Execution Button
+        self.execButton2 = QPushButton("Concatenate", self)
+        self.MatchingExecutionLayout.addWidget(self.execButton2, 0, 1)
+
+        # Match & Concatenate Execution Button
+        self.execButton3 = QPushButton("Match -> Concatenate", self)
+        self.MatchingExecutionLayout.addWidget(self.execButton3, 1, 0, 1, 2)
+
+        #-------------------------------------------------------
+        # Matched Point List Section
+        # ListItem
+        #-------------------------------------------------------
+        self.matchList = QListWidget(self)
+        self.frameLayout.addWidget(self.matchList)
+
+
+    def distanceSliderChanged(self):
+        self.svalue1.setText("%5.1f" % (self.paramSlider1.value() / 10.0))
+
+    def nndrSliderChanged(self):
+        self.svalue2.setText("%4.2f" % (self.paramSlider2.value() / 100.0))
+
+    def limitSliderChanged(self):
+        self.svalue3.setText("%4.2f" % (self.paramSlider3.value() / 100.0))
 
         
 
@@ -264,8 +325,14 @@ class CanvasScene(QGraphicsScene):
     def __init__(self, parent=None):
         super(CanvasScene, self).__init__(parent)
 
-    def addImage(self, filepath):
-        pass
+"""
+  class ImageWithMatchingPoint
+    Group Object of Pixmap(Image), MatchingPoint(Rect)
+    Inherited from QGraphicsItemGroup
+"""
+class ImageWithMatchingPoint(QGraphicsItemGroup):
+    def __init__(self, filepath, parent=None):
+        super(ImageWithMatchingPoint, self).__init__(parent)
 
 """
   class TransformableImage
