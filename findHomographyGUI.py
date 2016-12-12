@@ -152,40 +152,60 @@ class MatchingControlWidget(QWidget):
         self.frameLayout.addWidget(self.paramGroupBox)
 
         # Threshold control
+        self.paramCheckBox1 = QCheckBox(self)
         self.paramGroupBox_label1 = QLabel("Distance Threshold:")
         self.paramSlider1 = QSlider(Qt.Horizontal, self)
         self.paramSlider1.setMaximum(1000)
         self.paramSlider1.setMinimum(   0)
         self.svalue1 = QLabel(" 0.0")
         self.paramSlider1.setTracking(True)
-        self.paramGroupBox_grid.addWidget(self.paramGroupBox_label1, 0, 0)
-        self.paramGroupBox_grid.addWidget(self.paramSlider1, 0, 1)
-        self.paramGroupBox_grid.addWidget(self.svalue1, 0, 2)
-        self.connect(self.paramSlider1, SIGNAL('sliderMoved(int)'), self.distanceSliderChanged)
+        self.paramGroupBox_grid.addWidget(self.paramCheckBox1, 0, 0)
+        self.paramGroupBox_grid.addWidget(self.paramGroupBox_label1, 0, 1)
+        self.paramGroupBox_grid.addWidget(self.paramSlider1, 0, 2)
+        self.paramGroupBox_grid.addWidget(self.svalue1, 0, 3)
+        self.connect(self.paramCheckBox1, SIGNAL('stateChanged(int)'), self.distanceSliderSwitch)
+        self.connect(self.paramSlider1, SIGNAL('valueChanged(int)'), self.distanceSliderChanged)
+
+        self.paramCheckBox1.setChecked(True)
+        self.paramSlider1.setValue(400)
 
         # NNDR Threshold control
+        self.paramCheckBox2 = QCheckBox(self)
         self.paramGroupBox_label2 = QLabel("NNDR Threshold:")
         self.paramSlider2 = QSlider(Qt.Horizontal, self)
         self.paramSlider2.setMaximum(100)
         self.paramSlider2.setMinimum(  0)
         self.svalue2 = QLabel("0.00")
         self.paramSlider2.setTracking(True)
-        self.paramGroupBox_grid.addWidget(self.paramGroupBox_label2, 1, 0)
-        self.paramGroupBox_grid.addWidget(self.paramSlider2, 1, 1)
-        self.paramGroupBox_grid.addWidget(self.svalue2, 1, 2)
-        self.connect(self.paramSlider2, SIGNAL('sliderMoved(int)'), self.nndrSliderChanged)
+        self.paramGroupBox_grid.addWidget(self.paramCheckBox2, 1, 0)
+        self.paramGroupBox_grid.addWidget(self.paramGroupBox_label2, 1, 1)
+        self.paramGroupBox_grid.addWidget(self.paramSlider2, 1, 2)
+        self.paramGroupBox_grid.addWidget(self.svalue2, 1, 3)
+        self.connect(self.paramCheckBox2, SIGNAL('stateChanged(int)'), self.nndrSliderSwitch)
+        self.connect(self.paramSlider2, SIGNAL('valueChanged(int)'), self.nndrSliderChanged)
+
+        self.paramCheckBox2.setChecked(False)
+        self.paramSlider2.setValue(60)
+        self.paramSlider2.setDisabled(True)
 
         # Y limitation control
+        self.paramCheckBox3 = QCheckBox(self)
         self.paramGroupBox_label3 = QLabel("Y limitation:")
         self.paramSlider3 = QSlider(Qt.Horizontal, self)
         self.paramSlider3.setMaximum(100)
         self.paramSlider3.setMinimum(  0)
         self.svalue3 = QLabel("0.00")
         self.paramSlider3.setTracking(True)
-        self.paramGroupBox_grid.addWidget(self.paramGroupBox_label3, 2, 0)
-        self.paramGroupBox_grid.addWidget(self.paramSlider3, 2, 1)
-        self.paramGroupBox_grid.addWidget(self.svalue3, 2, 2)
-        self.connect(self.paramSlider3, SIGNAL('sliderMoved(int)'), self.limitSliderChanged)
+        self.paramGroupBox_grid.addWidget(self.paramCheckBox3, 2, 0)
+        self.paramGroupBox_grid.addWidget(self.paramGroupBox_label3, 2, 1)
+        self.paramGroupBox_grid.addWidget(self.paramSlider3, 2, 2)
+        self.paramGroupBox_grid.addWidget(self.svalue3, 2, 3)
+        self.connect(self.paramCheckBox3, SIGNAL('stateChanged(int)'), self.limitSliderSwitch)
+        self.connect(self.paramSlider3, SIGNAL('valueChanged(int)'), self.limitSliderChanged)
+
+        self.paramCheckBox3.setChecked(False)
+        self.paramSlider3.setValue(60)
+        self.paramSlider3.setDisabled(True)
 
         #-------------------------------------------------------
         # Matching Execution Section
@@ -213,6 +233,23 @@ class MatchingControlWidget(QWidget):
         self.matchList = QListWidget(self)
         self.frameLayout.addWidget(self.matchList)
 
+    def distanceSliderSwitch(self):
+        if self.paramCheckBox1.isChecked() == True:
+            self.paramSlider1.setEnabled(True)
+        else:
+            self.paramSlider1.setDisabled(True)
+
+    def nndrSliderSwitch(self):
+        if self.paramCheckBox2.isChecked() == True:
+            self.paramSlider2.setEnabled(True)
+        else:
+            self.paramSlider2.setDisabled(True)
+
+    def limitSliderSwitch(self):
+        if self.paramCheckBox3.isChecked() == True:
+            self.paramSlider3.setEnabled(True)
+        else:
+            self.paramSlider3.setDisabled(True)
 
     def distanceSliderChanged(self):
         self.svalue1.setText("%5.1f" % (self.paramSlider1.value() / 10.0))
@@ -222,6 +259,7 @@ class MatchingControlWidget(QWidget):
 
     def limitSliderChanged(self):
         self.svalue3.setText("%4.2f" % (self.paramSlider3.value() / 100.0))
+
 
         
 
