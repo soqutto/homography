@@ -13,6 +13,7 @@ class MyImage:
     def __init__(self, filepath=None):
         # MyImage.bitmap: numpy.ndarray(BGR, uint8)
         self.bitmap = None
+        self.bitmap_gray = None
         # Image in QImage representation
         self.bitmap_qImg = None
         # Image in QPixmap representation
@@ -25,6 +26,7 @@ class MyImage:
 
         # sliced image data for each representation
         self.bitmap_sliced = None
+        self.bitmap_sliced_gray = None
         self.bitmap_qImg_sliced = None
         self.bitmap_qPix_sliced = None
 
@@ -40,12 +42,14 @@ class MyImage:
 
     def reset(self):
         del(self.bitmap)
+        del(self.bitmap_gray)
         del(self.bitmap_qImg)
         del(self.bitmap_qPix)
         del(self.imagePolygon)
         del(self.slicePolygon)
         del(self.maskPolygon)
         del(self.bitmap_sliced)
+        del(self.bitmap_sliced_gray)
         del(self.bitmap_qImg_sliced)
         del(self.bitmap_qPix_sliced)
         gc.collect()
@@ -84,8 +88,12 @@ class MyImage:
             self.imagePolygon = QPolygonF( QRectF(0, 0, x, y) )
 
     # Get raw image data in numpy.ndarray representation
-    def getInNumpy(self):
-        return self.bitmap
+    def getInNumpy(self, gray=False):
+        if gray is True:
+            self.bitmap_gray = cv2.cvtColor(self.bitmap, cv2.COLOR_BGR2GRAY)
+            return self.bitmap_gray
+        else:
+            return self.bitmap
 
     def getInQImage(self):
         tempImage = cv2.cvtColor(self.bitmap, cv2.COLOR_BGR2RGB)
@@ -102,7 +110,7 @@ class MyImage:
         return self.bitmap_qPix
 
     # Get sliced image data in numpy.ndarray representation
-    def getSlicedInNumpy(self):
+    def getSlicedInNumpy(self, gray=False):
         self.getSlicedInQImage()
         temp_bitmap = self.bitmap_qImg_sliced.convertToFormat(QImage.Format_RGB888)
         ptr = temp_bitmap.bits()
@@ -111,7 +119,11 @@ class MyImage:
         self.bitmap_sliced = np.array(ptr).reshape(y, x, 3)
         self.bitmap_sliced = cv2.cvtColor(self.bitmap_sliced, cv2.COLOR_RGB2BGR)
 
-        return self.bitmap_sliced
+        if gray is True:
+            self.bitmap_sliced_gray = cv2.cvtColor(self.bitmap_sliced, cv2.COLOR_BGR2GRAY)
+            return self.bitmap_sliced_gray
+        else:
+            return self.bitmap_sliced
 
     # Get sliced image data in QImage representation
     def getSlicedInQImage(self):
