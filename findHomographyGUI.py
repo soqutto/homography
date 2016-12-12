@@ -118,8 +118,26 @@ class CanvasWidget(QWidget):
         self.layout = QVBoxLayout(self)
         self.layout.addWidget(self.canvas)
         self.layout.addWidget(self.controlGroup)
-
         self.setLayout(self.layout)
+
+        # Connect buttons to signals
+        self.connect(self.zoomButtonPlus, SIGNAL('clicked()'), self.zoomPlus)
+        self.connect(self.zoomButtonMinus, SIGNAL('clicked()'), self.zoomMinus)
+
+    def zoomPlus(self):
+        if self.canvas.getZoomState() < 6:
+            self.canvas.scale(1.25, 1.25)
+            self.canvas.setZoomState(self.canvas.getZoomState() + 1)
+            self.zoomStatusLabel.setText('Current Zoom Factor: %d' \
+                    % self.canvas.getZoomState())
+
+    def zoomMinus(self):
+        if self.canvas.getZoomState() > 0:
+            self.canvas.scale(0.8, 0.8)
+            self.canvas.setZoomState(self.canvas.getZoomState() - 1)
+            self.zoomStatusLabel.setText('Current Zoom Factor: %d' \
+                    % self.canvas.getZoomState())
+
 
 class MatchingControlWidget(QWidget):
     def __init__(self, parent=None):
@@ -263,7 +281,7 @@ class CanvasView(QGraphicsView):
     x0, y0       = None, None
     xdiff, ydiff = None, None
 
-    zoomState = 3
+    zoomState = 0
 
     def __init__(self, parent=None):
         super(CanvasView, self).__init__(parent)
@@ -271,6 +289,7 @@ class CanvasView(QGraphicsView):
         self.setScene(self.scene)
 
         self.setMouseTracking(True)
+        self.setDragMode(QGraphicsView.ScrollHandDrag)
         self.contextMenu = QMenu();
         self.contextMenuAction1 = self.contextMenu.addAction("Reset Shape")
         self.contextMenuAction2 = self.contextMenu.addAction("Delete item")
@@ -356,6 +375,7 @@ class CanvasView(QGraphicsView):
 class CanvasScene(QGraphicsScene):
     def __init__(self, parent=None):
         super(CanvasScene, self).__init__(parent)
+        self.setBackgroundBrush(QColor(200, 200, 200))
 
 """
   class ImageWithMatchingPoint
