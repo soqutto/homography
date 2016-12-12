@@ -8,13 +8,6 @@ import numpy as np
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
-class MyImage:
-    def __init__(self, filepath):
-        self.image_array = None
-
-        if filepath != "":
-            self.image_array = cv2.imread(filepath)
-
 class MyMatcher:
     def __init__(self, method='SIFT', desc='BRIEF', matcher='BruteForce-Hamming'):
 
