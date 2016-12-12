@@ -79,13 +79,84 @@ class MyMatcher:
         matches = self.matcher.knnMatch(descriptor1, descriptor2, k)
         return matches
 
-class MatchingSet:
-    def __init__(self, myImage1, myImage2):
+
+class MatchingController:
+    def __init__(self, myImage1=None, myImage2=None):
+        self.im1, self.im2 = myImage1, myImage2
         self.kp1, self.kp2 = None, None
         self.k1 , self.k2  = None, None
         self.d1 , self.d2  = None, None
         self.matches = None
+        self.matchesKNN = None
         self.matchPairs = []
+
+        self.matcher = MyMatcher()
+        self.H = None
+
+    def setImage(self, pos, myImage):
+        if pos == 1:
+            self.im1 = myImage
+        elif pos == 2:
+            self.im2 = myImage
+
+    def detect(self):
+        self.kp1 = self.matcher.detect(self.im1.getSlicedInNumpy(gray=True))
+        self.kp2 = self.matcher.detect(self.im2.getSlicedInNumpy(gray=True))
+
+    def compute(self):
+        self.k1, self.d1 = \
+                self.matcher.compute(self.im1.getSlicedInNumpy(gray=True), self.kp1)
+        self.k2, self.d2 = \
+                self.matcher.compute(self.im2.getSlicedInNumpy(gray=True), self.kp2)
+
+    def match(self):
+        self.matches = self.matcher.match(self.d1, self.d2)
+
+    def knnMatch(self, k=2):
+        if k >= 2:
+            self.matchesKNN = self.matcher.knnMatch(self.d1, self.d2, k)
+
+    def nndr(self, ratio=1.0):
+        for m in self.matchesKNN:
+            if m[0].distance < m[1].distance * ratio
+                self.matches.append(m[0])
+
+    def extractMatches(self):
+        self.matchPairs = [MatchPair( \
+                np.float32([self.k1[m.queryIdx].pt[0], self.k1[m.queryIdx].pt[1]]), \
+                np.float32([self.k2[m.trainIdx].pt[0], self.k2[m.trainIdx].pt[1]]), \
+                m.distance) for m in self.matches]
+
+    # threshold: real value
+    def distanceCutOff(self, threshold):
+        for (i, m) in enumerate(self.matchPairs):
+            if m.distance > threshold:
+                del(self.matchPairs[i])
+
+    # threshold: percentage(0-1 float)
+    def YCutOff(self, threshold):
+        y1, y2 = self.im1.shape()[1], self.im2.shape()[1]
+        y = y1 if y1 > y2 else y2
+
+        for (i, m) in enumerate(self.matchPairs):
+            if abs(m.point1[1] - m.point2[1]) > threshold * y:
+                del(self.matchPairs[i])
+
+    def calculateHomography(self):
+        self.H, Hstatus = cv2.findHomography( \
+                np.float32([m.point2 for m in matchPairs]), \
+                np.float32([m.point1 for m in matchPairs]), \
+                cv2.RANSAC)
+
+        for (i, stat) in enumerate(Hstatus):
+            if stat == [0]:
+                matchPairs[i].disable()
+
+    def rehashHomography(self):
+        self.H, _ = cv2.findHomography( \
+                np.float32([m.point2 for m in matchPairs if m.isAccepted()]),
+                np.float32([m.point1 for m in matchPairs if m.isAccepted()]))
+
 
 class MatchPair:
     def __init__(self, p1, p2, d, stat=[1]):
@@ -123,7 +194,7 @@ class MatchPair:
 
     def setPointByOffset(self, index, x=None, y=None):
         # その対応の座標位置を強制的に書き換える
-        # setPointの指定方法の代わりに差分を用いる
+        # setPointの指定方法の代わりに差分(移動量)を用いる
         if index == 1:
             p = self.point1
         elif index == 2:
