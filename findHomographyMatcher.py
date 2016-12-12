@@ -87,12 +87,64 @@ class MyMatcher:
         return matches
 
 class MatchingSet:
-    def __init__(self, myImage1, myImage2, matcherInstance):
+    def __init__(self, myImage1, myImage2):
         self.kp1, self.kp2 = None, None
         self.k1 , self.k2  = None, None
         self.d1 , self.d2  = None, None
+        self.matches = None
+        self.matchPairs = []
+
+class MatchPair:
+    def __init__(self, p1, p2, d, stat=[1]):
+        self.point1 = p1
+        self.point2 = p2
+        self.distance = d
+        self.inlier = stat[0]
+
+    def isAccepted(self):
+        if self.inlier == 1:
+            return True
+        else:
+            return False
+
+    def enable(self):
+        self.inlier = 1
+
+    def disable(self):
+        self.inlier = 0
+
+    def setPoint(self, index, x=None, y=None):
+        # その対応の座標位置を強制的に書き換える
+        # index == 1でpoint1を, index == 2でpoint2を書き換える
+        if index == 1:
+            p = self.point1
+        elif index == 2:
+            p = self.point2
+        else:
+            return
+
+        if x is not None:
+            p[0] = x
+        if y is not None:
+            p[1] = y
+
+    def setPointByOffset(self, index, x=None, y=None):
+        # その対応の座標位置を強制的に書き換える
+        # setPointの指定方法の代わりに差分を用いる
+        if index == 1:
+            p = self.point1
+        elif index == 2:
+            p = self.point2
+        else:
+            return
+
+        if x is not None:
+            p[0] += x
+        if y is not None:
+            p[1] += y
 
 
+# モジュールとして読み込まれるため単独動作はしない
 if __name__ == '__main__':
     pass
 
