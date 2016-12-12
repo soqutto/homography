@@ -27,6 +27,7 @@ class MyWindow(QMainWindow):
 
         # Layout Object (Left Side)
         self.layout_left = QVBoxLayout(self)
+        self.layout_left.setAlignment(Qt.AlignTop)
         self.layout_left.addWidget(self.inputWidget)
         self.layout_left.addWidget(self.canvasWidget)
 
@@ -93,47 +94,32 @@ class ImageInputWidget(QWidget):
         self.parent().findChild(CanvasView).imageFileAdd(self.input_path)
 
 
-class ImageAttributionWidget(QWidget):
-    def __init__(self, parent=None):
-        super(ImageAttributionWidget, self).__init__(parent)
-
-        # Widget Parts
-        self.Label = QLabel("Opacity:")
-        self.Slider = QSlider(Qt.Horizontal, self)
-
-        # Configure Slider
-        self.Slider.setMaximum(100)
-        self.Slider.setMinimum(  0)
-
-        # Layout Object
-        self.layout = QHBoxLayout(self)
-        self.layout.addWidget(self.Label)
-        self.layout.addWidget(self.Slider)
-
-        # Connect Slider to signal
-        self.connect(self.Slider, SIGNAL('sliderMoved(int)'), self.OpacitySliderChanged)
-
-    def OpacitySliderChanged(self):
-        pass
-
-    def setOpacitySlider(self, opacityFloat):
-        self.Slider.setValue(opacityFloat * 100)
-
-
 class CanvasWidget(QWidget):
     def __init__(self, parent=None):
         super(CanvasWidget, self).__init__(parent)
-
         # Widget Parts
         self.canvas = CanvasView(self)
+
+        # Widget for Control View
+        self.controlGroup = QGroupBox("View Control")
+        self.controlLayout = QHBoxLayout(self)
+
+        self.zoomButtonPlus = QPushButton('+', self)
+        self.zoomButtonMinus = QPushButton('-', self)
+        self.zoomStatusLabel = QLabel('Current Zoom Factor: %d' \
+                % self.canvas.getZoomState(), self)
+
+        self.controlLayout.addWidget(self.zoomButtonPlus)
+        self.controlLayout.addWidget(self.zoomButtonMinus)
+        self.controlLayout.addWidget(self.zoomStatusLabel)
+        self.controlGroup.setLayout(self.controlLayout)
 
         # Layout Object
         self.layout = QVBoxLayout(self)
         self.layout.addWidget(self.canvas)
+        self.layout.addWidget(self.controlGroup)
 
         self.setLayout(self.layout)
-        #self.setCentralWidget(self.canvas)
-
 
 class MatchingControlWidget(QWidget):
     def __init__(self, parent=None):
@@ -277,6 +263,8 @@ class CanvasView(QGraphicsView):
     x0, y0       = None, None
     xdiff, ydiff = None, None
 
+    zoomState = 3
+
     def __init__(self, parent=None):
         super(CanvasView, self).__init__(parent)
         self.scene = CanvasScene(self)
@@ -309,6 +297,12 @@ class CanvasView(QGraphicsView):
         for (i, imageItem) in enumerate(self.imageItems):
             if imageItem is self.capturedItem:
                 imageItem.resetShape()
+
+    def getZoomState(self):
+        return self.zoomState
+
+    def setZoomState(self, z):
+        self.zoomState = z
 
     def mouseMoveEvent(self, event):
         if self.isPressed == True:
@@ -536,7 +530,7 @@ def main():
     app = QApplication(sys.argv)
     app.aboutToQuit.connect(app.deleteLater)
     window = MyWindow()
-    window.resize(800,600)
+    window.resize(1280,800)
     window.show()
     app.exec_()
 
