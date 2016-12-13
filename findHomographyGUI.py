@@ -12,6 +12,9 @@ from PyQt4.QtGui import *
 import numpy as np
 import cv2
 
+from findHomographyImage import *
+from findHomographyMatcher import *
+
 class MyWindow(QMainWindow):
     def __init__(self):
         super(MyWindow, self).__init__()
@@ -44,6 +47,26 @@ class MyWindow(QMainWindow):
 
         self.widget.setLayout(self.layout_frame)
         self.setCentralWidget(self.widget)
+
+        # Store Image Object
+        self.myImageObjects = [None, None]
+
+    def imageRegist(self, pos, filepath):
+        self.myImageObjects[pos] = MyImage(filepath)
+
+        # Regist image to MatchingController
+        self.findChild(MatchingControlWidget).controller.setImage(\
+                pos, self.myImageObjects[pos])
+
+        # Regist image to CanvasView Widget
+        imageItem = self.findChild(CanvasView).imageAdd(pos, self.myImageObjects[pos])
+        self.myImageObjects[pos].setPixmapItem(imageItem)
+
+    def imageUnregist(self, item):
+        for (i, obj) in enumerate(self.myImageObjects):
+            if obj is item:
+                self.myImageObjects[i] = None
+
 
 
 class ImageInputWidget(QWidget):
@@ -82,7 +105,7 @@ class ImageInputWidget(QWidget):
         self.connect(self.fileAddButton, SIGNAL('clicked()'), self.imageFileAdd)
 
 
-    # called if FileDialogButton pressed
+    # called if fileDialogButton pressed
     def filedialog_open(self):
         # QFileDialog Object
         self.input_path = QFileDialog.getOpenFileName( \
@@ -90,8 +113,10 @@ class ImageInputWidget(QWidget):
         if (self.input_path != ""):
             self.inputBox.setText(self.input_path)
 
+    # called if fileAddButton pressed
     def imageFileAdd(self):
-        self.parent().findChild(CanvasView).imageFileAdd(self.input_path)
+        self.window().imageRegist(self.comboBox.currentIndex(), self.input_path)
+
 
 
 class CanvasWidget(QWidget):
@@ -125,14 +150,14 @@ class CanvasWidget(QWidget):
         self.connect(self.zoomButtonMinus, SIGNAL('clicked()'), self.zoomMinus)
 
     def zoomPlus(self):
-        if self.canvas.getZoomState() < 6:
+        if self.canvas.getZoomState() < 9:
             self.canvas.scale(1.25, 1.25)
             self.canvas.setZoomState(self.canvas.getZoomState() + 1)
             self.zoomStatusLabel.setText('Current Zoom Factor: %d' \
                     % self.canvas.getZoomState())
 
     def zoomMinus(self):
-        if self.canvas.getZoomState() > 0:
+        if self.canvas.getZoomState() > -8:
             self.canvas.scale(0.8, 0.8)
             self.canvas.setZoomState(self.canvas.getZoomState() - 1)
             self.zoomStatusLabel.setText('Current Zoom Factor: %d' \
@@ -142,6 +167,12 @@ class CanvasWidget(QWidget):
 class MatchingControlWidget(QWidget):
     def __init__(self, parent=None):
         super(MatchingControlWidget, self).__init__(parent)
+
+        #-------------------------------------------------------
+        # MatchingController
+        # Initialization
+        #-------------------------------------------------------
+        self.controller = MatchingController()
 
         # Layouts and Widgets Initialize
         self.frameLayout = QVBoxLayout(self)
@@ -230,6 +261,10 @@ class MatchingControlWidget(QWidget):
         self.execButton3 = QPushButton("Match -> Concatenate", self)
         self.MatchingExecutionLayout.addWidget(self.execButton3, 1, 0, 1, 2)
 
+        # Connect Buttons
+        self.connect(self.execButton1, SIGNAL('clicked()'), self.execMatch)
+        self.connect(self.execButton2, SIGNAL('clicked()'), self.execConcatenate)
+
         #-------------------------------------------------------
         # Matched Point List Section
         # ListItem
@@ -264,8 +299,63 @@ class MatchingControlWidget(QWidget):
     def limitSliderChanged(self):
         self.svalue3.setText("%4.2f" % (self.paramSlider3.value() / 100.0))
 
+    def distanceChecked(self):
+        if self.paramCheckBox1.isChecked() == True:
+            return True
+        else:
+            return False
 
-        
+    def nndrChecked(self):
+        if self.paramCheckBox2.isChecked() == True:
+            return True
+        else:
+            return False
+
+    def limitChecked(self):
+        if self.paramCheckBox3.isChecked() == True:
+            return True
+        else:
+            return False
+
+    def distanceSliderValue(self):
+        return self.paramSlider1.value() / 10.0
+
+    def nndrSliderValue(self):
+        return self.paramSlider2.value() / 100.0
+
+    def limitSliderValue(self):
+        return self.paramSlider3.value() / 100.0
+
+    def execMatch(self):
+        if self.controller.im1 is None or self.controller.im2 is None:
+            print "Warning: some of images are not registered."
+            return
+
+        self.controller.clean()
+
+        self.controller.detect()
+        self.controller.compute()
+
+        if self.nndrChecked():
+            self.controller.knnMatch()
+            self.controller.nndr(self.nndrSliderValue())
+        else:
+            self.controller.match()
+
+        self.controller.extractMatches()
+
+        if self.distanceChecked():
+            self.controller.distanceCutOff(self.distanceSliderValue())
+        if self.limitChecked():
+            self.controller.YCutOff(self.limitSliderValue())
+
+        self.controller.calculateHomography()
+
+        self.controller.drawMatch()
+
+
+    def execConcatenate(self):
+        pass
 
 
 class CanvasView(QGraphicsView):
@@ -273,6 +363,7 @@ class CanvasView(QGraphicsView):
     isDragged = False
 
     imageItems = []
+    edgeItems = []
 
     capturedItems = []
     capturedItem  = None
@@ -291,31 +382,31 @@ class CanvasView(QGraphicsView):
         self.setMouseTracking(True)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
         self.contextMenu = QMenu();
-        self.contextMenuAction1 = self.contextMenu.addAction("Reset Shape")
-        self.contextMenuAction2 = self.contextMenu.addAction("Delete item")
+        self.contextMenuAction1 = self.contextMenu.addAction("Delete item")
 
-        self.connect(self.contextMenuAction1, SIGNAL('triggered()'), self.imageReset)
-        self.connect(self.contextMenuAction2, SIGNAL('triggered()'), self.imageDelete)
+        self.connect(self.contextMenuAction1, SIGNAL('triggered()'), self.imageDelete)
 
     # called if FileAddButton pressed
-    def imageFileAdd(self, filepath):
-        transformableImageItem = TransformableImage(filepath)
-        transformableImageItem.setFlags( \
-                QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
-        self.scene.addItem(transformableImageItem)
-        self.imageItems.append(transformableImageItem)
+    def imageAdd(self, pos, myImageItem):
+        imageItem = ImageWithMatchingPoint(myImageItem)
+        self.scene.addItem(imageItem)
+
+        x, y = imageItem.parentImage.shape()
+        if pos == 0:
+            imageItem.setPos(QPointF(self.frameRect().width() * -0.05 - x, y / -2.0))
+        elif pos == 1:
+            imageItem.setPos(QPointF(self.frameRect().width() * 0.05, y / -2.0))
+        self.imageItems.append(imageItem)
+
+        return imageItem
 
     # called if contextMenuAction1 "Delete item" pressed
     def imageDelete(self):
         for (i, imageItem) in enumerate(self.imageItems):
-            if imageItem is self.capturingItem:
-                self.scene.removeItem(self.captureItem)
-                del(self.imageItems[i])
-
-    def imageReset(self):
-        for (i, imageItem) in enumerate(self.imageItems):
             if imageItem is self.capturedItem:
-                imageItem.resetShape()
+                self.scene.removeItem(self.capturedItem)
+                del(self.imageItems[i])
+                self.window().imageUnregist(imageItem.parentImage)
 
     def getZoomState(self):
         return self.zoomState
@@ -345,9 +436,12 @@ class CanvasView(QGraphicsView):
         self.currentPos = event.pos()
         self.x0, self.y0 = self.currentPos.x(), self.currentPos.y()
 
+        print "current pos in view: ", self.currentPos
+        print "current pos in scene: ", self.mapToScene(self.currentPos)
+
         self.capturedItems =  self.items(event.pos())
         for capturedItem in self.capturedItems:
-            if type(capturedItem) == QGraphicsRectItem:
+            if type(capturedItem) == ImageWithMatchingPoint:
                 self.capturedItem = capturedItem
                 return
 
@@ -365,7 +459,8 @@ class CanvasView(QGraphicsView):
 
     def contextMenuEvent(self, event):
         self.capturedItems = self.scene.items(self.mapToScene(event.pos()))
-        self.capturedItem = self.capturedItems[0].group()
+        if self.capturedItems != []:
+            self.capturedItem = self.capturedItems[0].group()
 
         self.contextMenu.exec_(self.mapToGlobal(event.pos()))
 
@@ -383,135 +478,83 @@ class CanvasScene(QGraphicsScene):
     Inherited from QGraphicsItemGroup
 """
 class ImageWithMatchingPoint(QGraphicsItemGroup):
-    def __init__(self, filepath, parent=None):
+    def __init__(self, myImage, parent=None):
         super(ImageWithMatchingPoint, self).__init__(parent)
 
-"""
-  class TransformableImage
-    Group Object of Pixmap(Image), Matrix(Transform), Boundary(Polygon), Anchor(Rect)
-    Inherited from QGraphicsItemGroup
-    ピクスマップ、変換行列、境界線、アンカーポイントを含んだ
-    QGraphicsItemGroupベースのグループクラス
-"""
-class TransformableImage(QGraphicsItemGroup):
-    isPressed = False
-    isDragged = False
-    capturingItems = []
-    capturingItem = None
+        # linked MyImage item
+        self.parentImage = myImage
 
-    def __init__(self, filepath, parent=None):
-        super(TransformableImage, self).__init__(parent)
-
-        self.setAcceptHoverEvents(True)
+        # Matching Point Store
+        self.matchingPoint = []
 
         # Create an image(base)
-        self.pixmapItem = QPixmap(filepath)
+        self.pixmapItem = self.parentImage.getInQPixmap()
         self.imageItem = QGraphicsPixmapItem(self.pixmapItem, self)
-
-        self.transformMatrix = QTransformWithNumpy()
-        self.transformedPixmapItem = self.pixmapItem.transformed(self.transformMatrix)
-        self.imageItem.setPixmap(self.transformedPixmapItem)
 
         # Create an boundary polygon
         self.imageShape = self.imageItem.shape()
         self.imagePolygon = self.imageShape.toFillPolygon()
-        self.boundaryItem  = QGraphicsPolygonItem(self.imagePolygon, self)
-
-        self.corners = [self.imagePolygon.at(i) for i in range(0, self.imagePolygon.count())]
-        # Create copy of self.corners(used in calculating homography matrix)
-        self.cornersInit = self.corners[:]
-        # Initialize empty list of each anchors
-        self.anchorItems = [None for i in range(0,4)]
-
-        # Create four corner anchors(draggable) and add to self.anchors
-        for i in range(0, 4):
-            self.anchorItems[i] = \
-                    QGraphicsRectItem(self.corners[i].x()-5, self.corners[i].y()-5, 10, 10, self)
-
-        # Style anchors
-        for anchorItem in self.anchorItems:
-            anchorItem.setPen( QColor(0, 0, 0) )
-            anchorItem.setBrush( QColor(255, 255, 255) )
-        # Style boundary
-        self.boundaryItem.setPen( QColor(255, 0, 0) )
+        self.boundaryItem = QGraphicsPolygonItem(self.imagePolygon, self)
 
         # Add any child items to group
         self.addToGroup(self.imageItem)
-        #self.addToGroup(self.transformedPixmapItem)
         self.addToGroup(self.boundaryItem)
-        for anchorItem in self.anchorItems:
-            self.addToGroup(anchorItem)
+
+    def addMatchingPoint(self, x, y):
+        point = MatchingPointHandle(self)
+        point.setPos(x, y)
+        self.matchingPoint.append(point)
+        self.addToGroup(point)
+
+    def deleteMatchingPoint(self, idx):
+        pass
+
+    def deleteAllMatchingPoint(self):
+        if self.matchingPoint != []:
+            for (i, item) in enumerate(self.matchingPoint):
+                self.removeFromGroup(item)
+                item.scene().removeItem(item)
+                del(self.matchingPoint[i])
+
+
+
 
     def mouseMoveEvent(self, event):
-        super(TransformableImage, self).mouseMoveEvent(event)
+        super(ImageWithMatchingPoint, self).mouseMoveEvent(event)
 
     def mousePressEvent(self, event):
-        super(TransformableImage, self).mousePressEvent(event)
+        super(ImageWithMatchingPoint, self).mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
-        super(TransformableImage, self).mouseReleaseEvent(event)
+        super(ImageWithMatchingPoint, self).mouseReleaseEvent(event)
 
-    # Move one anchor point to offset(xdiff, ydiff) value
-    def moveAnchor(self, passedAnchorItem, xdiff, ydiff):
-        # Find Index of passedAnchorItem in self.anchorItems
-        for (i, anchorItem) in enumerate(self.anchorItems):
-            if anchorItem is passedAnchorItem:
-                capturedAnchor = anchorItem
-                capturedAnchorIdx = i
-                print "capturedAnchor.pos(): ", capturedAnchor.pos()
-                print "TransformableImage.corners[capturedAnchorIdx]: ", self.corners[capturedAnchorIdx]
+"""
+  class MatchingPointHandle
+    Group Object of QGraphicsRectItem, QGraphicsLineItem
+    Inherited from QGraphicsItemGroup
+"""
+class MatchingPointHandle(QGraphicsItemGroup):
+    def __init__(self, parent=None):
+        super(MatchingPointHandle, self).__init__(parent)
 
-        # Move Anchor(QGraphicsRectItem)
-        currentAnchorPos = (capturedAnchor.pos().x(), capturedAnchor.pos().y())
-        capturedAnchor.setPos(currentAnchorPos[0] + xdiff, currentAnchorPos[1] + ydiff)
+        self.items = []
 
-        # Change Shape of ImagePolygon(QGraphicsPolygonItem)
-        currentCornerPos = (self.corners[capturedAnchorIdx].x(), self.corners[capturedAnchorIdx].y() )
-        newCornerPos = QPointF(currentCornerPos[0] + xdiff, currentCornerPos[1] + ydiff)
-        self.imagePolygon.replace(capturedAnchorIdx, newCornerPos)
-        self.corners[capturedAnchorIdx] = self.imagePolygon.at(capturedAnchorIdx)
+        self.frame = QGraphicsRectItem(QRectF(0,0,10,10), self)
+        self.frame.setPen(QColor(0,0,0))
+        self.frame.setBrush(QColor(180,180,180,60))
+        self.vline = QGraphicsLineItem(QLineF(5,0,5,10), self)
+        self.vline.setPen(QColor(0,0,0))
+        self.hline = QGraphicsLineItem(QLineF(0,5,10,5), self)
+        self.hline.setPen(QColor(0,0,0))
 
-        # If anchor was origin point(#0), also apply to terminal point(#4)
-        if capturedAnchorIdx == 0:
-            self.imagePolygon.replace(4, newCornerPos)
-            self.corners[4] = self.imagePolygon.at(capturedAnchorIdx)
+        self.items.append(self.frame)
+        self.items.append(self.vline)
+        self.items.append(self.hline)
 
-        # Reapply Polygon to self.boundaryItem(QGraphicsPolygonItem)
-        self.boundaryItem.setPolygon(self.imagePolygon)
+        self.addToGroup(self.frame)
+        self.addToGroup(self.vline)
+        self.addToGroup(self.hline)
 
-        # kari---
-        self.cornersInitNumpy = np.float32([[corner.x(), corner.y()] for corner in self.cornersInit])
-        print "TransformaleImage.cornersInitNumpy:\n", self.cornersInitNumpy
-        self.cornersAfterNumpy = np.float32([[corner.x(), corner.y()] for corner in self.corners])
-        print "TransformableImage.cornersAfterNumpy:\n", self.cornersAfterNumpy
-
-        self.H, self.inliers = cv2.findHomography(self.cornersInitNumpy, self.cornersAfterNumpy)
-        print "TransformableImage.H:\n", self.H
-        self.transformMatrix.setMatrixInNumpy(self.H)
-        self.transformedPixmapItem = self.pixmapItem.transformed(self.transformMatrix)
-        self.imageItem.setPixmap(self.transformedPixmapItem)
-        print "TransformedPixmap: x=%4d, y=%4d" % \
-                (self.transformedPixmapItem.width(), self.transformedPixmapItem.height())
-
-        # Determine offsets to minimal x/y value in the item
-        offset_x = np.min(self.cornersAfterNumpy[:,0])
-        offset_y = np.min(self.cornersAfterNumpy[:,1])
-        self.imageItem.setOffset(offset_x, offset_y)
-        print "TransformableImage.pixmapItem.offset: ", self.imageItem.offset()
-
-    def resetShape(self):
-        for (anchor, pos, init) in zip(self.anchorItems, self.corners, self.cornersInit):
-            self.moveAnchor(anchor, init.x()-pos.x(), init.y()-pos.y())
-        
-        
-
-#    def hoverEnterEvent(self, event):
-#        super(hoverEnterEvent, self).hoverEnterEvent(event)
-#        self.imagePolygon.setPen( QColor(255, 0, 0) )
-#
-#    def hoverLeaveEvent(self, event):
-#        super(hoverLeaveEvent, self).hoverLeaveEvent(event)
-#        self.imagePolygon.setPen( QColor(0, 0, 0) )
 
 """ 
   class QTransformWithNumpy:
@@ -543,7 +586,6 @@ class QTransformWithNumpy(QTransform):
             self.setMatrix( matrix[0,0], matrix[1,0], matrix[2,0], \
                             matrix[0,1], matrix[1,1], matrix[2,1], \
                             matrix[0,2], matrix[1,2], matrix[2,2]  )
-
 
 
 def main():

@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
+import gc
 
 class MyMatcher:
     def __init__(self, method='SIFT', desc='BRIEF', matcher='BruteForce-Hamming'):
@@ -25,7 +26,7 @@ class MyMatcher:
         # Create Keypoint Matcher
         self.setMatcherType(matcher)
 
-    def setDetectorType(method_type):
+    def setDetectorType(self, method_type):
         if method_type == 'SIFT':
             self.detector = cv2.FeatureDetector_create('SIFT')
         elif method_type == 'SURF':
@@ -33,7 +34,7 @@ class MyMatcher:
         else:
             sys.exit("Error: Unknown Keypoint Type.")
 
-    def setDescriptorType(descriptor_type):
+    def setDescriptorType(self, descriptor_type):
         if descriptor_type == 'SIFT':
             self.descriptor = cv2.DescriptorExtractor_create('SIFT')
         elif descriptor_type == 'SURF':
@@ -49,7 +50,7 @@ class MyMatcher:
         else:
             sys.exit("Error: Unknown Keypoint-Descriptor Type.")
 
-    def setMatcherType(matcher_type):
+    def setMatcherType(self, matcher_type):
         if matcher_type == 'BruteForce-Hamming':
             self.matcher = cv2.DescriptorMatcher_create('BruteForce-Hamming')
         elif matcher_type == 'BruteForce-Hamming(2)':
@@ -63,19 +64,19 @@ class MyMatcher:
         else:
             sys.exit("Error: Unknown Keypoint-Matcher Type.")
 
-    def detect(grayscale):
+    def detect(self, grayscale):
         kp = self.detector.detect(grayscale)
         return kp
 
-    def compute(grayscale, keypoint):
+    def compute(self, grayscale, keypoint):
         keyp, desc_value = self.descriptor.compute(grayscale, keypoint)
         return (keyp, desc_value)
 
-    def match(descriptor1, descriptor2):
+    def match(self, descriptor1, descriptor2):
         matches = self.matcher.match(descriptor1, descriptor2)
         return matches
 
-    def knnMatch(descriptor1, descriptor2, k=2):
+    def knnMatch(self, descriptor1, descriptor2, k=2):
         matches = self.matcher.knnMatch(descriptor1, descriptor2, k)
         return matches
 
@@ -90,13 +91,28 @@ class MatchingController:
         self.matchesKNN = None
         self.matchPairs = []
 
+        self.matchCompleteFlag = False
+
         self.matcher = MyMatcher()
         self.H = None
 
+    def clean(self):
+        if self.matchCompleteFlag == True:
+            del(self.kp1)
+            del(self.kp2)
+            del(self.k1)
+            del(self.k2)
+            del(self.d1)
+            del(self.d2)
+            del(self.matches)
+            del(self.matchesKNN)
+            del(self.matchPairs)
+            self.__init__(self.im1, self.im2)
+
     def setImage(self, pos, myImage):
-        if pos == 1:
+        if pos == 0:
             self.im1 = myImage
-        elif pos == 2:
+        elif pos == 1:
             self.im2 = myImage
 
     def detect(self):
@@ -118,7 +134,7 @@ class MatchingController:
 
     def nndr(self, ratio=1.0):
         for m in self.matchesKNN:
-            if m[0].distance < m[1].distance * ratio
+            if m[0].distance < m[1].distance * ratio:
                 self.matches.append(m[0])
 
     def extractMatches(self):
@@ -144,18 +160,29 @@ class MatchingController:
 
     def calculateHomography(self):
         self.H, Hstatus = cv2.findHomography( \
-                np.float32([m.point2 for m in matchPairs]), \
-                np.float32([m.point1 for m in matchPairs]), \
+                np.float32([m.point2 for m in self.matchPairs]), \
+                np.float32([m.point1 for m in self.matchPairs]), \
                 cv2.RANSAC)
 
         for (i, stat) in enumerate(Hstatus):
             if stat == [0]:
-                matchPairs[i].disable()
+                self.matchPairs[i].disable()
 
     def rehashHomography(self):
         self.H, _ = cv2.findHomography( \
-                np.float32([m.point2 for m in matchPairs if m.isAccepted()]),
+                np.float32([m.point2 for m in matchPairs if m.isAccepted()]), \
                 np.float32([m.point1 for m in matchPairs if m.isAccepted()]))
+    
+    def drawMatch(self):
+        self.im1.pixmapItem.deleteAllMatchingPoint()
+        self.im2.pixmapItem.deleteAllMatchingPoint()
+        for match in self.matchPairs:
+            self.im1.pixmapItem.addMatchingPoint(match.point1[0], match.point1[1])
+            self.im2.pixmapItem.addMatchingPoint(match.point2[0], match.point2[1])
+
+        self.matchCompleteFlag = True
+
+
 
 
 class MatchPair:

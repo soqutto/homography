@@ -9,6 +9,9 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 import gc
 
+SIZE_MAX_X = 800
+SIZE_MAX_Y = 800
+
 class MyImage:
     def __init__(self, filepath=None):
         # MyImage.bitmap: numpy.ndarray(BGR, uint8)
@@ -37,8 +40,22 @@ class MyImage:
             self.readFile(filepath)
 
     def readFile(self, filepath):
-        self.bitmap = cv2.imread(filepath)
+        self.bitmap = cv2.imread(unicode(filepath))
+        self.resize()
         self.setImagePolygon()
+
+    def resize(self):
+        y, x = self.bitmap.shape[:2]
+        if x > SIZE_MAX_X:
+            y = y * (SIZE_MAX_X / float(x))
+            x = SIZE_MAX_X
+        if y > SIZE_MAX_Y:
+            x = x * (SIZE_MAX_Y / float(y))
+            y = SIZE_MAX_Y
+
+        x, y = int(x), int(y)
+        self.bitmap = cv2.resize(self.bitmap, (x, y))
+
 
     def reset(self):
         del(self.bitmap)
@@ -98,16 +115,16 @@ class MyImage:
     def getInQImage(self):
         tempImage = cv2.cvtColor(self.bitmap, cv2.COLOR_BGR2RGB)
         x, y = self.shape()
-        self.bitmap_qImg = QImage(tempImage, x, y, QImage.Format_RGB888)
+        self.bitmap_qImg = QImage(tempImage, x, y, x*tempImage.shape[2], QImage.Format_RGB888)
 
-        return self.bitmap_qImg
+        return self.bitmap_qImg.copy()
 
     def getInQPixmap(self):
         tempPixmap = QPixmap()
         tempPixmap.convertFromImage(self.getInQImage())
         self.bitmap_qPix = tempPixmap
 
-        return self.bitmap_qPix
+        return self.bitmap_qPix.copy()
 
     # Get sliced image data in numpy.ndarray representation
     def getSlicedInNumpy(self, gray=False):
@@ -127,15 +144,17 @@ class MyImage:
 
     # Get sliced image data in QImage representation
     def getSlicedInQImage(self):
-        self.maskPolygon = self.imagePolygon.subtracted(self.slicePolygon)
         self.bitmap_qImg_sliced = self.getInQImage().copy()
+        if self.slicePolygon is None:
+            return self.bitmap_qImg_sliced.copy()
 
+        self.maskPolygon = self.imagePolygon.subtracted(self.slicePolygon)
         painter = QPainter(self.bitmap_qImg_sliced)
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(QColor(0,0,0)))
         painter.drawPolygon(self.maskPolygon)
 
-        return self.bitmap_qImg_sliced
+        return self.bitmap_qImg_sliced.copy()
 
     # Get sliced image data in QPixmap representation
     def getSlicedInQPixmap(self):
@@ -144,7 +163,7 @@ class MyImage:
         tempPixmap.convertFromImage(self.bitmap_qImg_sliced)
         self.bitmap_qPix_sliced = tempPixmap
 
-        return self.bitmap_qPix_sliced
+        return self.bitmap_qPix_sliced.copy()
 
 
 # モジュールとして読み込まれるため単独動作はしない
