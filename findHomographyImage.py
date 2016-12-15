@@ -24,7 +24,7 @@ class MyImage:
 
         # Image Slicing Polygon(/Rectangle)
         self.imagePolygon = None
-        self.slicePolygon = None #QPolygonF
+        self.slicePolygon = None
         self.maskPolygon = None
 
         # sliced image data for each representation
@@ -117,14 +117,14 @@ class MyImage:
         x, y = self.shape()
         self.bitmap_qImg = QImage(tempImage, x, y, x*tempImage.shape[2], QImage.Format_RGB888)
 
-        return self.bitmap_qImg.copy()
+        return self.bitmap_qImg
 
     def getInQPixmap(self):
         tempPixmap = QPixmap()
         tempPixmap.convertFromImage(self.getInQImage())
         self.bitmap_qPix = tempPixmap
 
-        return self.bitmap_qPix.copy()
+        return self.bitmap_qPix
 
     # Get sliced image data in numpy.ndarray representation
     def getSlicedInNumpy(self, gray=False):
@@ -146,7 +146,7 @@ class MyImage:
     def getSlicedInQImage(self):
         self.bitmap_qImg_sliced = self.getInQImage().copy()
         if self.slicePolygon is None:
-            return self.bitmap_qImg_sliced.copy()
+            return self.bitmap_qImg_sliced
 
         self.maskPolygon = self.imagePolygon.subtracted(self.slicePolygon)
         painter = QPainter(self.bitmap_qImg_sliced)
@@ -154,7 +154,7 @@ class MyImage:
         painter.setBrush(QBrush(QColor(0,0,0)))
         painter.drawPolygon(self.maskPolygon)
 
-        return self.bitmap_qImg_sliced.copy()
+        return self.bitmap_qImg_sliced
 
     # Get sliced image data in QPixmap representation
     def getSlicedInQPixmap(self):
@@ -163,7 +163,7 @@ class MyImage:
         tempPixmap.convertFromImage(self.bitmap_qImg_sliced)
         self.bitmap_qPix_sliced = tempPixmap
 
-        return self.bitmap_qPix_sliced.copy()
+        return self.bitmap_qPix_sliced
 
 
 # モジュールとして読み込まれるため単独動作はしない
