@@ -48,14 +48,16 @@ class MyWindow(QMainWindow):
         self.widget.setLayout(self.layout_frame)
         self.setCentralWidget(self.widget)
 
+        # Matching processor
+        self.routine = Matching
         # Store Image Object
         self.myImageObjects = [None, None]
 
     def imageRegist(self, pos, filepath):
         self.myImageObjects[pos] = MyImage(filepath)
 
-        # Regist image to MatchingController
-        self.findChild(MatchingControlWidget).controller.setImage(\
+        # Regist image to MatchingProcessor
+        self.findChild(MatchingControlWidget).processor.setImage(\
                 pos, self.myImageObjects[pos])
 
         # Regist image to CanvasView Widget
@@ -169,10 +171,10 @@ class MatchingControlWidget(QWidget):
         super(MatchingControlWidget, self).__init__(parent)
 
         #-------------------------------------------------------
-        # MatchingController
+        # MatchingProcessor
         # Initialization
         #-------------------------------------------------------
-        self.controller = MatchingController()
+        self.processor = MatchingProcessor()
 
         # Layouts and Widgets Initialize
         self.frameLayout = QVBoxLayout(self)
@@ -327,31 +329,31 @@ class MatchingControlWidget(QWidget):
         return self.paramSlider3.value() / 100.0
 
     def execMatch(self):
-        if self.controller.im1 is None or self.controller.im2 is None:
+        if self.processor.im1 is None or self.processor.im2 is None:
             print "Warning: some of images are not registered."
             return
 
-        self.controller.clean()
+        self.processor.clean()
 
-        self.controller.detect()
-        self.controller.compute()
+        self.processor.detect()
+        self.processor.compute()
 
         if self.nndrChecked():
-            self.controller.knnMatch()
-            self.controller.nndr(self.nndrSliderValue())
+            self.processor.knnMatch()
+            self.processor.nndr(self.nndrSliderValue())
         else:
-            self.controller.match()
+            self.processor.match()
 
-        self.controller.extractMatches()
+        self.processor.extractMatches()
 
         if self.distanceChecked():
-            self.controller.distanceCutOff(self.distanceSliderValue())
+            self.processor.distanceCutOff(self.distanceSliderValue())
         if self.limitChecked():
-            self.controller.YCutOff(self.limitSliderValue())
+            self.processor.YCutOff(self.limitSliderValue())
 
-        self.controller.calculateHomography()
+        self.processor.calculateHomography()
 
-        self.controller.drawMatch()
+        self.processor.drawMatch()
 
 
     def execConcatenate(self):

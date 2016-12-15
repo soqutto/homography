@@ -81,7 +81,7 @@ class MyMatcher:
         return matches
 
 
-class MatchingController:
+class MatchingProcessor:
     def __init__(self, myImage1=None, myImage2=None):
         self.im1, self.im2 = myImage1, myImage2
         self.kp1, self.kp2 = None, None
