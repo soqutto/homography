@@ -129,12 +129,12 @@ class MyImage:
     # Get sliced image data in numpy.ndarray representation
     def getSlicedInNumpy(self, gray=False):
         self.getSlicedInQImage()
-        temp_bitmap = self.bitmap_qImg_sliced.convertToFormat(QImage.Format_RGB888)
-        ptr = temp_bitmap.bits()
+        temp_bitmap = self.bitmap_qImg_sliced.convertToFormat(QImage.Format_ARGB32)
+        ptr = temp_bitmap.constBits()
         ptr.setsize(temp_bitmap.byteCount())
         x, y = self.shape()
-        self.bitmap_sliced = np.array(ptr).reshape(y, x, 3)
-        self.bitmap_sliced = cv2.cvtColor(self.bitmap_sliced, cv2.COLOR_RGB2BGR)
+        self.bitmap_sliced = np.array(ptr).reshape(y, x, 4)
+        self.bitmap_sliced = cv2.cvtColor(self.bitmap_sliced, cv2.COLOR_RGBA2BGR)
 
         if gray is True:
             self.bitmap_sliced_gray = cv2.cvtColor(self.bitmap_sliced, cv2.COLOR_BGR2GRAY)
