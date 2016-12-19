@@ -12,8 +12,9 @@ from PyQt4.QtGui import *
 import numpy as np
 import cv2
 
-from module_core.findHomographyImage import *
-from module_core.findHomographyMatcher import *
+from module_core.Image import *
+from module_core.Matcher import *
+from module_core.Concatenate import *
 
 class MyWindow(QMainWindow):
     def __init__(self):
