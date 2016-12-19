@@ -49,7 +49,7 @@ class MyWindow(QMainWindow):
         self.setCentralWidget(self.widget)
 
         # Matching processor
-        self.routine = Matching
+        #self.routine = Matching
         # Store Image Object
         self.myImageObjects = [None, None]
 
@@ -259,13 +259,18 @@ class MatchingControlWidget(QWidget):
         self.execButton2 = QPushButton("Concatenate", self)
         self.MatchingExecutionLayout.addWidget(self.execButton2, 0, 1)
 
+        # Delete All matching point Button
+        self.execButton3 = QPushButton("Delete All Matches", self)
+        self.MatchingExecutionLayout.addWidget(self.execButton3, 0, 2)
+
         # Match & Concatenate Execution Button
-        self.execButton3 = QPushButton("Match -> Concatenate", self)
-        self.MatchingExecutionLayout.addWidget(self.execButton3, 1, 0, 1, 2)
+        self.execButton4 = QPushButton("Match -> Concatenate", self)
+        self.MatchingExecutionLayout.addWidget(self.execButton4, 1, 0, 1, 3)
 
         # Connect Buttons
         self.connect(self.execButton1, SIGNAL('clicked()'), self.execMatch)
         self.connect(self.execButton2, SIGNAL('clicked()'), self.execConcatenate)
+        self.connect(self.execButton3, SIGNAL('clicked()'), self.deleteAllMatches)
 
         #-------------------------------------------------------
         # Matched Point List Section
@@ -358,6 +363,9 @@ class MatchingControlWidget(QWidget):
 
     def execConcatenate(self):
         pass
+
+    def deleteAllMatches(self):
+        self.processor.deleteAllMatches()
 
 
 class CanvasView(QGraphicsView):
@@ -487,7 +495,10 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
         self.parentImage = myImage
 
         # Matching Point Store
-        self.matchingPoint = []
+        self.matchingPoints = []
+
+        #
+        self.matchingLines = []
 
         # Create an image(base)
         self.pixmapItem = self.parentImage.getInQPixmap()
@@ -505,18 +516,19 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
     def addMatchingPoint(self, x, y):
         point = MatchingPointHandle(self)
         point.setPos(x, y)
-        self.matchingPoint.append(point)
         self.addToGroup(point)
+        self.matchingPoints.append(point)
 
     def deleteMatchingPoint(self, idx):
         pass
 
     def deleteAllMatchingPoint(self):
-        if self.matchingPoint != []:
-            for (i, item) in enumerate(self.matchingPoint):
-                self.removeFromGroup(item)
-                item.scene().removeItem(item)
-                del(self.matchingPoint[i])
+        if self.matchingPoints != []:
+            for (matchingPoint, matchingLine) in zip(self.matchingPoints, self.matchingLines):
+                self.removeFromGroup(matchingPoint)
+                self.removeFromGroup(matchingLine)
+            self.update()
+            self.matchingPoints = []
 
 
 
@@ -557,6 +569,14 @@ class MatchingPointHandle(QGraphicsItemGroup):
         self.addToGroup(self.vline)
         self.addToGroup(self.hline)
 
+
+"""
+  class MatchingLine
+    Line Object contains both side of nodes
+    Inherited from QGraphicsLineItem
+"""
+class MatchingLine(QGraphicsLineItem):
+    pass
 
 """ 
   class QTransformWithNumpy:

@@ -87,8 +87,8 @@ class MatchingProcessor:
         self.kp1, self.kp2 = None, None
         self.k1 , self.k2  = None, None
         self.d1 , self.d2  = None, None
-        self.matches = None
-        self.matchesKNN = None
+        self.matches = []
+        self.matchesKNN = []
         self.matchPairs = []
 
         self.matchCompleteFlag = False
@@ -182,6 +182,10 @@ class MatchingProcessor:
 
         self.matchCompleteFlag = True
 
+    def deleteAllMatches(self):
+        self.im1.pixmapItem.deleteAllMatchingPoint()
+        self.im2.pixmapItem.deleteAllMatchingPoint()
+        self.clean()
 
 
 
