@@ -5,13 +5,14 @@
     shape images using homography matrix and composite
 """
 
-import PyQt4.QtCore import *
-import PyQt4.QtGui import *
+from PyQt4.QtCore import *
+from PyQt4.QtGui import *
 import numpy as np
 import cv2
 
+
 class Concatenator:
-    def __init__(self, im1=None, im2=None, H, matchPairs=[]):
+    def __init__(self, im1=None, im2=None, H=None, matchPairs=[]):
         self.image1 = im1 #MyImage Instance
         self.image2 = im2 #MyImage Instance
 

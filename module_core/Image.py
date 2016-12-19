@@ -36,7 +36,7 @@ class MyImage:
         # Specify PixmapItem in GUI
         self.pixmapItem = None
 
-        if type(data) is str or type(data) is unicode:
+        if type(data) in {str, unicode, QString}:
             self.readFile(data)
         elif type(data) is np.ndarray:
             self.readFromNdarray(data)
