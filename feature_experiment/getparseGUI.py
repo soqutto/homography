@@ -134,9 +134,11 @@ class CanvasView(QGraphicsView):
 
         self.setMouseTracking(True)
         self.contextMenu = QMenu();
-        self.contextMenuAction1 = self.contextMenu.addAction("Delete item")
+        self.contextMenuAction1 = self.contextMenu.addAction("Reset Shape")
+        self.contextMenuAction2 = self.contextMenu.addAction("Delete item")
 
-        self.connect(self.contextMenuAction1, SIGNAL('triggered()'), self.imageDelete)
+        self.connect(self.contextMenuAction1, SIGNAL('triggered()'), self.imageReset)
+        self.connect(self.contextMenuAction2, SIGNAL('triggered()'), self.imageDelete)
 
     # called if FileAddButton pressed
     def imageFileAdd(self, filepath):
@@ -150,9 +152,13 @@ class CanvasView(QGraphicsView):
     def imageDelete(self):
         for (i, imageItem) in enumerate(self.imageItems):
             if imageItem is self.capturingItem:
-                self.scene.removeItem(self.capturingItem)
+                self.scene.removeItem(self.captureItem)
                 del(self.imageItems[i])
 
+    def imageReset(self):
+        for (i, imageItem) in enumerate(self.imageItems):
+            if imageItem is self.capturedItem:
+                imageItem.resetShape()
 
     def mouseMoveEvent(self, event):
         if self.isPressed == True:
@@ -195,13 +201,13 @@ class CanvasView(QGraphicsView):
         super(CanvasView, self).mouseReleaseEvent(event)
 
     def contextMenuEvent(self, event):
-        self.capturingItems = self.scene.items(self.mapToScene(event.pos()))
-        self.capturingItem = self.capturingItems[0].group()
+        self.capturedItems = self.scene.items(self.mapToScene(event.pos()))
+        self.capturedItem = self.capturedItems[0].group()
 
         self.contextMenu.exec_(self.mapToGlobal(event.pos()))
 
-        self.capturingItems = []
-        self.capturingItem = None
+        self.capturedItems = []
+        self.capturedItem = None
 
 class CanvasScene(QGraphicsScene):
     def __init__(self, parent=None):
@@ -323,6 +329,9 @@ class TransformableImage(QGraphicsItemGroup):
         self.imageItem.setOffset(offset_x, offset_y)
         print "TransformableImage.pixmapItem.offset: ", self.imageItem.offset()
 
+    def resetShape(self):
+        for (anchor, pos, init) in zip(self.anchorItems, self.corners, self.cornersInit):
+            self.moveAnchor(anchor, init.x()-pos.x(), init.y()-pos.y())
         
         
 
