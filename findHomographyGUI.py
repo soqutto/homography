@@ -12,8 +12,8 @@ from PyQt4.QtGui import *
 import numpy as np
 import cv2
 
-from findHomographyImage import *
-from findHomographyMatcher import *
+from module_core.findHomographyfindHomographyImage import *
+from module_core.findHomographyfindHomographyMatcher import *
 
 class MyWindow(QMainWindow):
     def __init__(self):
@@ -541,6 +541,7 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
 
     def mouseReleaseEvent(self, event):
         super(ImageWithMatchingPoint, self).mouseReleaseEvent(event)
+
 
 """
   class MatchingPointHandle
