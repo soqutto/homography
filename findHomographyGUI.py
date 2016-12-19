@@ -480,7 +480,27 @@ class CanvasView(QGraphicsView):
 class CanvasScene(QGraphicsScene):
     def __init__(self, parent=None):
         super(CanvasScene, self).__init__(parent)
+
+        self.matchingLines = []
         self.setBackgroundBrush(QColor(200, 200, 200))
+
+    # Add Matching Line
+    def addMatchingLine(self, p1, p2, color=None, parent=None):
+        if type(p1) is not MatchingPointHandle or type(p2) is not MatchingPointHandle:
+            return
+        else:
+            matchingLine = MatchingLine(p1, p2, color)
+            self.addItem(matchingLine)
+            self.matchingLines.append(matchingLine)
+            p1.group().setMatchingLine(matchingLine)
+            p2.group().setMatchingLine(matchingLine)
+
+    def deleteAllMatchingLine(self):
+        for matchingLine in self.matchingLines:
+            self.removeItem(matchingLine)
+        self.matchingLines = []
+
+
 
 """
   class ImageWithMatchingPoint
@@ -519,19 +539,22 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
         self.addToGroup(point)
         self.matchingPoints.append(point)
 
+        return point
+
     def deleteMatchingPoint(self, idx):
         pass
 
+    def setMatchingLine(self, line):
+        self.matchingLines.append(line)
+
     def deleteAllMatchingPoint(self):
         if self.matchingPoints != []:
-            for matchingPoint in self.matchingPoints:
-            #for (matchingPoint, matchingLine) in zip(self.matchingPoints, self.matchingLines):
+            for (matchingPoint, matchingLine) in zip(self.matchingPoints, self.matchingLines):
                 self.removeFromGroup(matchingPoint)
-                #self.removeFromGroup(matchingLine)
+                self.removeFromGroup(matchingLine)
             self.update()
             self.matchingPoints = []
-
-
+            self.matchingLines = []
 
 
     def mouseMoveEvent(self, event):
@@ -555,12 +578,12 @@ class MatchingPointHandle(QGraphicsItemGroup):
 
         self.items = []
 
-        self.frame = QGraphicsRectItem(QRectF(0,0,10,10), self)
+        self.frame = QGraphicsRectItem(QRectF(-5,-5,10,10), self)
         self.frame.setPen(QColor(0,0,0))
         self.frame.setBrush(QColor(180,180,180,60))
-        self.vline = QGraphicsLineItem(QLineF(5,0,5,10), self)
+        self.vline = QGraphicsLineItem(QLineF( 0,-5, 0, 5), self)
         self.vline.setPen(QColor(0,0,0))
-        self.hline = QGraphicsLineItem(QLineF(0,5,10,5), self)
+        self.hline = QGraphicsLineItem(QLineF(-5, 0, 5, 0), self)
         self.hline.setPen(QColor(0,0,0))
 
         self.items.append(self.frame)
@@ -578,38 +601,20 @@ class MatchingPointHandle(QGraphicsItemGroup):
     Inherited from QGraphicsLineItem
 """
 class MatchingLine(QGraphicsLineItem):
-    pass
+    def __init__(self, p1=None, p2=None, color=None, parent=None):
+        super(MatchingLine, self).__init__(parent)
+        # set two MatchingPointHandle instances
+        self.point1 = p1 # origin
+        self.point2 = p2 # terminal
 
-""" 
-  class QTransformWithNumpy:
-    QTransform Class with utilities for using in Numpy representation
-    QTransformクラスにNumpy形式で使うためのユーティリティを実装したクラス
-"""
-class QTransformWithNumpy(QTransform):
-    def __init__(self):
-        super(QTransformWithNumpy, self).__init__()
-        self.matrix_NumpyFloat32 = np.zeros([3,3], dtype=np.float32)
-        self.matrix_NumpyFloat32 = self.inNumpyFloat32()
+        self.point1_pos = self.point1.mapToScene(0, 0) #QPointF
+        self.point2_pos = self.point2.mapToScene(0, 0) #QPointF
+        self.setLine(QLineF(self.point1_pos, self.point2_pos))
 
-
-    def reset(self):
-        self.setMatrix(1.0, 0.0, 0.0, \
-                       0.0, 1.0, 0.0, \
-                       0.0, 0.0, 1.0)
-
-    # function inNumpy(): returns QTransform in numpy.float32 representation
-    def inNumpyFloat32(self):
-        self.matrix_NumpyFloat32 = np.float32([[self.m11(), self.m12(), self.m13()], \
-                                               [self.m21(), self.m22(), self.m23()], \
-                                               [self.m31(), self.m32(), self.m33()]] )
-        return self.matrix_NumpyFloat32
-
-    # function
-    def setMatrixInNumpy(self, matrix):
-        if matrix.shape == (3,3):
-            self.setMatrix( matrix[0,0], matrix[1,0], matrix[2,0], \
-                            matrix[0,1], matrix[1,1], matrix[2,1], \
-                            matrix[0,2], matrix[1,2], matrix[2,2]  )
+        if color is None:
+            self.setPen(QColor(0,0,0))
+        else:
+            self.setPen(QColor.fromHsv(color[0], color[1], color[2]))
 
 
 def main():

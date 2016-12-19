@@ -174,19 +174,18 @@ class MatchingProcessor:
                 np.float32([m.point1 for m in matchPairs if m.isAccepted()]))
     
     def drawMatch(self):
-        self.im1.pixmapItem.deleteAllMatchingPoint()
-        self.im2.pixmapItem.deleteAllMatchingPoint()
-        for match in self.matchPairs:
-            self.im1.pixmapItem.addMatchingPoint(match.point1[0], match.point1[1])
-            self.im2.pixmapItem.addMatchingPoint(match.point2[0], match.point2[1])
-
+        self.deleteAllMatches()
+        for (i, match) in enumerate(self.matchPairs):
+            point1 = self.im1.pixmapItem.addMatchingPoint(match.point1[0], match.point1[1])
+            point2 = self.im2.pixmapItem.addMatchingPoint(match.point2[0], match.point2[1])
+            self.im1.pixmapItem.scene().addMatchingLine(point1, point2, match.distanceToHSV())
         self.matchCompleteFlag = True
 
     def deleteAllMatches(self):
         self.im1.pixmapItem.deleteAllMatchingPoint()
         self.im2.pixmapItem.deleteAllMatchingPoint()
+        self.im1.pixmapItem.scene().deleteAllMatchingLine()
         self.clean()
-
 
 
 class MatchPair:
@@ -237,6 +236,14 @@ class MatchPair:
             p[0] += x
         if y is not None:
             p[1] += y
+
+    def distanceToHSV(self):
+        # convert distance 0-100 into HSV(Hue)180-0
+        r = self.distance / 100.0
+        H, S, V = 180 * (1 - r), 220, 255
+
+        return (H,S,V)
+        
 
 
 # モジュールとして読み込まれるため単独動作はしない

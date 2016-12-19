@@ -166,6 +166,38 @@ class MyImage:
         return self.bitmap_qPix_sliced
 
 
+""" 
+  class QTransformWithNumpy:
+    QTransform Class with utilities for using in Numpy representation
+    QTransformクラスにNumpy形式で使うためのユーティリティを実装したクラス
+"""
+class QTransformWithNumpy(QTransform):
+    def __init__(self):
+        super(QTransformWithNumpy, self).__init__()
+        self.matrix_NumpyFloat32 = np.zeros([3,3], dtype=np.float32)
+        self.matrix_NumpyFloat32 = self.inNumpyFloat32()
+
+
+    def reset(self):
+        self.setMatrix(1.0, 0.0, 0.0, \
+                       0.0, 1.0, 0.0, \
+                       0.0, 0.0, 1.0)
+
+    # function inNumpy(): returns QTransform in numpy.float32 representation
+    def inNumpyFloat32(self):
+        self.matrix_NumpyFloat32 = np.float32([[self.m11(), self.m12(), self.m13()], \
+                                               [self.m21(), self.m22(), self.m23()], \
+                                               [self.m31(), self.m32(), self.m33()]] )
+        return self.matrix_NumpyFloat32
+
+    # function
+    def setMatrixInNumpy(self, matrix):
+        if matrix.shape == (3,3):
+            self.setMatrix( matrix[0,0], matrix[1,0], matrix[2,0], \
+                            matrix[0,1], matrix[1,1], matrix[2,1], \
+                            matrix[0,2], matrix[1,2], matrix[2,2]  )
+
+
 # モジュールとして読み込まれるため単独動作はしない
 if __name__ == '__main__':
     pass
