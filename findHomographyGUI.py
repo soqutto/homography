@@ -12,8 +12,8 @@ from PyQt4.QtGui import *
 import numpy as np
 import cv2
 
-from module_core.findHomographyfindHomographyImage import *
-from module_core.findHomographyfindHomographyMatcher import *
+from module_core.findHomographyImage import *
+from module_core.findHomographyMatcher import *
 
 class MyWindow(QMainWindow):
     def __init__(self):
@@ -494,10 +494,10 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
         # linked MyImage item
         self.parentImage = myImage
 
-        # Matching Point Store
+        # Matching point storing array
         self.matchingPoints = []
 
-        #
+        # Matching line storing array
         self.matchingLines = []
 
         # Create an image(base)
@@ -524,9 +524,10 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
 
     def deleteAllMatchingPoint(self):
         if self.matchingPoints != []:
-            for (matchingPoint, matchingLine) in zip(self.matchingPoints, self.matchingLines):
+            for matchingPoint in self.matchingPoints:
+            #for (matchingPoint, matchingLine) in zip(self.matchingPoints, self.matchingLines):
                 self.removeFromGroup(matchingPoint)
-                self.removeFromGroup(matchingLine)
+                #self.removeFromGroup(matchingLine)
             self.update()
             self.matchingPoints = []
 
