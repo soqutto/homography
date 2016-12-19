@@ -13,7 +13,7 @@ SIZE_MAX_X = 800
 SIZE_MAX_Y = 800
 
 class MyImage:
-    def __init__(self, filepath=None):
+    def __init__(self, data):
         # MyImage.bitmap: numpy.ndarray(BGR, uint8)
         self.bitmap = None
         self.bitmap_gray = None
@@ -36,11 +36,19 @@ class MyImage:
         # Specify PixmapItem in GUI
         self.pixmapItem = None
 
-        if filepath is not None:
-            self.readFile(filepath)
+        if type(data) is str or type(data) is unicode:
+            self.readFile(data)
+        elif type(data) is np.ndarray:
+            self.readFromNdarray(data)
+            
 
     def readFile(self, filepath):
         self.bitmap = cv2.imread(unicode(filepath))
+        self.resize()
+        self.setImagePolygon()
+
+    def readFromNdarray(self, data):
+        self.bitmap = data.copy()
         self.resize()
         self.setImagePolygon()
 
