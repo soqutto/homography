@@ -242,12 +242,14 @@ class MatchPair:
             p[1] += y
 
     def distanceToHSV(self):
-        # convert distance 0-100 into HSV(Hue)180-0
-        r = self.distance / 100.0
-        H, S, V = 180 * (1 - r), 220, 255
+        if self.isAccepted():
+            # convert distance 0-100 into HSV(Hue)180-0
+            r = self.distance / 100.0
+            H, S, V = 180 * (1 - r), 220, 255
+            return (H,S,V)
 
-        return (H,S,V)
-        
+        else:
+            return (0, 20, 180)
 
 
 # モジュールとして読み込まれるため単独動作はしない
