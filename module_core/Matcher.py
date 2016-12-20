@@ -159,10 +159,14 @@ class MatchingProcessor:
                 del(self.matchPairs[i])
 
     def calculateHomography(self):
-        self.H, Hstatus = cv2.findHomography( \
-                np.float32([m.point2 for m in self.matchPairs]), \
-                np.float32([m.point1 for m in self.matchPairs]), \
-                cv2.RANSAC)
+        if len(self.matchPairs) >= 4:
+            self.H, Hstatus = cv2.findHomography( \
+                    np.float32([m.point2 for m in self.matchPairs]), \
+                    np.float32([m.point1 for m in self.matchPairs]), \
+                    cv2.RANSAC)
+        else:
+            print "calculateHomography(): not enough matching pairs"
+            return
 
         for (i, stat) in enumerate(Hstatus):
             if stat == [0]:
