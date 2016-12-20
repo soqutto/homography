@@ -176,6 +176,8 @@ class MatchingControlWidget(QWidget):
         # Initialization
         #-------------------------------------------------------
         self.processor = MatchingProcessor()
+        self.concatenator = None
+        self.subwindow = None
 
         # Layouts and Widgets Initialize
         self.frameLayout = QVBoxLayout(self)
@@ -363,7 +365,16 @@ class MatchingControlWidget(QWidget):
 
 
     def execConcatenate(self):
-        pass
+        self.concatenator = Concatenator( \
+            self.processor.im1, self.processor.im2, self.processor.H, self.processor.matchPairs)
+        if self.subwindow is None:
+            self.subwindow = ConcatenateWindow(self)
+            self.subwindow.show()
+        else:
+            self.subwindow.activateWindow()
+
+        img = self.concatenator.concatenate()
+        self.subwindow.drawImage(img.getInQPixmap())
 
     def deleteAllMatches(self):
         self.processor.deleteAllMatches()
@@ -616,6 +627,22 @@ class MatchingLine(QGraphicsLineItem):
             self.setPen(QColor(0,0,0))
         else:
             self.setPen(QColor.fromHsv(color[0], color[1], color[2]))
+
+
+class ConcatenateWindow(QWidget):
+    def __init__(self, parent=None):
+        super(ConcatenateWindow, self).__init__(parent)
+        self.setWindowFlags(Qt.Window)
+        self.resize(800,600)
+
+        self.imageItem = QLabel("image here")
+        self.layout = QHBoxLayout()
+        self.layout.addWidget(self.imageItem)
+        self.setLayout(self.layout)
+
+    def drawImage(self, pixmap):
+        self.imageItem.setPixmap(pixmap)
+
 
 
 def main():

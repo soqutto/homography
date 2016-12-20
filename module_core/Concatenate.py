@@ -10,6 +10,8 @@ from PyQt4.QtGui import *
 import numpy as np
 import cv2
 
+from Image import *
+from Matcher import *
 
 class Concatenator:
     def __init__(self, im1=None, im2=None, H=None, matchPairs=[]):
@@ -41,10 +43,34 @@ class Concatenator:
         self.matches = matchPairs
 
     def concatenate(self):
-        x1, y1 = im1.shape()
-        x2, y2 = im2.shape()
-        warpedImage = MyImage( \
-                cv2.warpPerspective(self.image1.getInNumpy(gray=True), self.transform, (x2, y2)) )
+        X, Y, cnt = 0, 0, 0
+        x1, y1 = self.image1.shape()
+        x2, y2 = self.image2.shape()
 
-        self.dst = warpedImage
+        for MatchPair in self.matches:
+            if MatchPair.isAccepted():
+                X += abs(MatchPair.point1[0] - MatchPair.point2[0])
+                Y += abs(MatchPair.point1[1] - MatchPair.point2[1])
+                cnt += 1
+
+        if cnt == 0:
+            return
+
+        X = int(round(X / cnt))
+        Y = int(round(Y / cnt))
+
+        sX = int(round(x2 + X * 1.25))
+        sY = int(round(y2 + Y * 1.25))
+
+        im1 = self.image1.getInNumpy()
+        warpedImage = cv2.warpPerspective(self.image2.getInNumpy(), self.transform, (int(x2+X*1.25), int(y2+Y*1.25)))
+
+        for i in xrange(x1):
+            for j in xrange(y1):
+                warpedImage[j, i] = im1[j, i]
+
+        self.dst = MyImage(warpedImage)
+        self.dst.getInQImage().save("debug.png")
+
+        return self.dst
 
