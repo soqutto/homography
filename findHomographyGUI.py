@@ -145,7 +145,26 @@ class MainController(object):
 
         self.__matchingProcessor.drawMatch()
 
+    def isAcceptedMatch(self, idx):
+        return self.__matchingProcessor.matchPairs[idx].isAccepted()
+
+    def dumpMatch(self, idx=None):
+        self.__matchingProcessor.dumpMatch(idx)
+
+    def setEnableMatch(self, idx):
+        self.__matchingProcessor.matchPairs[idx].enable()
+        matchingLine = self.__myImageObjects[0].pixmapItem.getMatchingLine(idx)
+        matchingLine.setColor(self.__matchingProcessor.matchPairs[idx].distanceToHSV())
+        matchingLine.status = True
+
+    def setDisableMatch(self, idx):
+        self.__matchingProcessor.matchPairs[idx].disable()
+        matchingLine = self.__myImageObjects[0].pixmapItem.getMatchingLine(idx)
+        matchingLine.setColor(self.__matchingProcessor.matchPairs[idx].distanceToHSV())
+        matchingLine.status = False
+
     def execConcatenate(self):
+        self.__matchingProcessor.rehashHomography()
         self.__concatenator = Concatenator( \
             self.__matchingProcessor.im1, self.__matchingProcessor.im2, \
             self.__matchingProcessor.H, self.__matchingProcessor.matchPairs)
@@ -158,6 +177,7 @@ class MainController(object):
 
         img = self.__concatenator.concatenate()
         self.__concatenateWindow.drawImage(img.getInQPixmap())
+
 
     def deleteAllMatches(self):
         self.__matchingProcessor.deleteAllMatches()
@@ -439,6 +459,8 @@ class CanvasView(QGraphicsView):
     capturedItems = []
     capturedItem  = None
 
+    contextMenuItems = []
+
     currentPos   = None
     x0, y0       = None, None
     xdiff, ydiff = None, None
@@ -457,9 +479,9 @@ class CanvasView(QGraphicsView):
         self.setMouseTracking(True)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
         self.contextMenu = QMenu();
-        self.contextMenuAction1 = self.contextMenu.addAction("Delete item")
+        #self.contextMenuAction1 = self.contextMenu.addAction("Delete item")
 
-        self.connect(self.contextMenuAction1, SIGNAL('triggered()'), self.imageDelete)
+        #self.connect(self.contextMenuAction1, SIGNAL('triggered()'), self.imageDelete)
 
     # called if FileAddButton pressed
     def imageAdd(self, pos, myImageItem):
@@ -516,8 +538,10 @@ class CanvasView(QGraphicsView):
 
         self.capturedItems =  self.items(event.pos())
         for capturedItem in self.capturedItems:
-            if type(capturedItem) == ImageWithMatchingPoint:
+            if type(capturedItem) == MatchingPointHandle:
                 self.capturedItem = capturedItem
+                print capturedItem.pos()
+                MainController().dumpMatch(capturedItem.pointID)
                 return
 
         # Default Action
@@ -533,14 +557,32 @@ class CanvasView(QGraphicsView):
         super(CanvasView, self).mouseReleaseEvent(event)
 
     def contextMenuEvent(self, event):
+        cnt = 0
         self.capturedItems = self.scene.items(self.mapToScene(event.pos()))
         if self.capturedItems != []:
-            if MatchingPointHandle in map(type, self.capturedItems):
-                pass
+            for item in self.capturedItems:
+                if type(item) is MatchingPointHandle:
+                    idx = item.pointID
+                    if item.group().getMatchingLine(idx).status is True:
+                        self.contextMenuItems.append( \
+                                self.contextMenu.addAction("[#%2d]Disable this Match" % idx))
+                        self.contextMenuItems[cnt].triggered.connect( \
+                                lambda: MainController().setDisableMatch(idx))
+                        cnt += 1
+                    else:
+                        self.contextMenuItems.append( \
+                                self.contextMenu.addAction("[#%2d]Enable this Match" % idx))
+                        self.contextMenuItems[cnt].triggered.connect( \
+                                lambda: MainController().setEnableMatch(idx))
+                        cnt += 1
 
                 #self.capturedItem = self.capturedItems[0].group()
 
         self.contextMenu.exec_(self.mapToGlobal(event.pos()))
+        self.contextMenu.clear()
+        self.contextMenuItems = []
+
+        MainController().dumpMatch()
 
         self.capturedItems = []
         self.capturedItem = None
@@ -618,6 +660,14 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
     def setMatchingLine(self, line):
         self.matchingLines.append(line)
 
+    def getMatchingLine(self, idx):
+        for matchingLine in self.matchingLines:
+            if matchingLine.lineID == idx:
+                return matchingLine
+            else:
+                continue
+        return None
+
     def deleteAllMatchingPoint(self):
         if self.matchingPoints != []:
             for (matchingPoint, matchingLine) in zip(self.matchingPoints, self.matchingLines):
@@ -647,6 +697,7 @@ class MatchingPointHandle(QGraphicsItemGroup):
     def __init__(self, idx=None, parent=None):
         super(MatchingPointHandle, self).__init__(parent)
 
+        self.pointID = idx
         self.items = []
 
         self.frame = QGraphicsRectItem(QRectF(-5,-5,10,10), self)
@@ -678,6 +729,10 @@ class MatchingLine(QGraphicsLineItem):
         self.point1 = p1 # origin
         self.point2 = p2 # terminal
 
+        # MatchingLine number
+        self.lineID = idx
+        self.status = MainController().isAcceptedMatch(idx)
+
         self.point1_pos = self.point1.mapToScene(0, 0) #QPointF
         self.point2_pos = self.point2.mapToScene(0, 0) #QPointF
         self.setLine(QLineF(self.point1_pos, self.point2_pos))
@@ -686,6 +741,9 @@ class MatchingLine(QGraphicsLineItem):
             self.setPen(QColor(0,0,0))
         else:
             self.setPen(QColor.fromHsv(color[0], color[1], color[2]))
+
+    def setColor(self, color):
+        self.setPen(QColor.fromHsv(color[0], color[1], color[2]))
 
 
 class ConcatenateWindow(QWidget):

@@ -174,8 +174,14 @@ class MatchingProcessor:
 
     def rehashHomography(self):
         self.H, _ = cv2.findHomography( \
-                np.float32([m.point2 for m in matchPairs if m.isAccepted()]), \
-                np.float32([m.point1 for m in matchPairs if m.isAccepted()]))
+                np.float32([m.point2 for m in self.matchPairs if m.isAccepted()]), \
+                np.float32([m.point1 for m in self.matchPairs if m.isAccepted()]))
+
+    def dumpMatch(self, idx=None):
+        for (i, match) in enumerate(self.matchPairs):
+            if idx is None or i == idx:
+                print "Match idx:%2d, p1:%s, p2:%s, distance:%3.1f, stat:%s" % \
+                    (i, match.point1, match.point2, match.distance, match.isAccepted())
     
     def drawMatch(self):
         self.deleteAllMatches()
@@ -192,6 +198,7 @@ class MatchingProcessor:
         if self.im2.pixmapItem is not None:
             self.im2.pixmapItem.deleteAllMatchingPoint()
         self.clean()
+
 
 
 class MatchPair:
