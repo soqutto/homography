@@ -176,9 +176,9 @@ class MatchingProcessor:
     def drawMatch(self):
         self.deleteAllMatches()
         for (i, match) in enumerate(self.matchPairs):
-            point1 = self.im1.pixmapItem.addMatchingPoint(match.point1[0], match.point1[1])
-            point2 = self.im2.pixmapItem.addMatchingPoint(match.point2[0], match.point2[1])
-            self.im1.pixmapItem.scene().addMatchingLine(point1, point2, match.distanceToHSV())
+            point1 = self.im1.pixmapItem.addMatchingPoint(i, match.point1[0], match.point1[1])
+            point2 = self.im2.pixmapItem.addMatchingPoint(i, match.point2[0], match.point2[1])
+            self.im1.pixmapItem.scene().addMatchingLine(i, point1, point2, match.distanceToHSV())
         self.matchCompleteFlag = True
 
     def deleteAllMatches(self):

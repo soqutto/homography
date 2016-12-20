@@ -107,7 +107,6 @@ class ImageInputWidget(QWidget):
         self.connect(self.fileDialogButton, SIGNAL('clicked()'), self.filedialog_open)
         self.connect(self.fileAddButton, SIGNAL('clicked()'), self.imageFileAdd)
 
-
     # called if fileDialogButton pressed
     def filedialog_open(self):
         # QFileDialog Object
@@ -119,7 +118,6 @@ class ImageInputWidget(QWidget):
     # called if fileAddButton pressed
     def imageFileAdd(self):
         self.window().imageRegist(self.comboBox.currentIndex(), self.input_path)
-
 
 
 class CanvasWidget(QWidget):
@@ -482,12 +480,16 @@ class CanvasView(QGraphicsView):
     def contextMenuEvent(self, event):
         self.capturedItems = self.scene.items(self.mapToScene(event.pos()))
         if self.capturedItems != []:
-            self.capturedItem = self.capturedItems[0].group()
+            if MatchingPointHandle in map(type, self.capturedItems):
+                pass
+
+                #self.capturedItem = self.capturedItems[0].group()
 
         self.contextMenu.exec_(self.mapToGlobal(event.pos()))
 
         self.capturedItems = []
         self.capturedItem = None
+
 
 class CanvasScene(QGraphicsScene):
     def __init__(self, parent=None):
@@ -497,11 +499,11 @@ class CanvasScene(QGraphicsScene):
         self.setBackgroundBrush(QColor(200, 200, 200))
 
     # Add Matching Line
-    def addMatchingLine(self, p1, p2, color=None, parent=None):
+    def addMatchingLine(self, i, p1, p2, color=None, parent=None):
         if type(p1) is not MatchingPointHandle or type(p2) is not MatchingPointHandle:
             return
         else:
-            matchingLine = MatchingLine(p1, p2, color)
+            matchingLine = MatchingLine(i, p1, p2, color)
             self.addItem(matchingLine)
             self.matchingLines.append(matchingLine)
             p1.group().setMatchingLine(matchingLine)
@@ -511,7 +513,6 @@ class CanvasScene(QGraphicsScene):
         for matchingLine in self.matchingLines:
             self.removeItem(matchingLine)
         self.matchingLines = []
-
 
 
 """
@@ -545,8 +546,8 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
         self.addToGroup(self.imageItem)
         self.addToGroup(self.boundaryItem)
 
-    def addMatchingPoint(self, x, y):
-        point = MatchingPointHandle(self)
+    def addMatchingPoint(self, idx, x, y):
+        point = MatchingPointHandle(idx, self)
         point.setPos(x, y)
         self.addToGroup(point)
         self.matchingPoints.append(point)
@@ -585,7 +586,7 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
     Inherited from QGraphicsItemGroup
 """
 class MatchingPointHandle(QGraphicsItemGroup):
-    def __init__(self, parent=None):
+    def __init__(self, idx=None, parent=None):
         super(MatchingPointHandle, self).__init__(parent)
 
         self.items = []
@@ -613,7 +614,7 @@ class MatchingPointHandle(QGraphicsItemGroup):
     Inherited from QGraphicsLineItem
 """
 class MatchingLine(QGraphicsLineItem):
-    def __init__(self, p1=None, p2=None, color=None, parent=None):
+    def __init__(self, idx=None, p1=None, p2=None, color=None, parent=None):
         super(MatchingLine, self).__init__(parent)
         # set two MatchingPointHandle instances
         self.point1 = p1 # origin
