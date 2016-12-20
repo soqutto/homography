@@ -186,9 +186,11 @@ class MatchingProcessor:
         self.matchCompleteFlag = True
 
     def deleteAllMatches(self):
-        self.im1.pixmapItem.deleteAllMatchingPoint()
-        self.im2.pixmapItem.deleteAllMatchingPoint()
-        self.im1.pixmapItem.scene().deleteAllMatchingLine()
+        if self.im1.pixmapItem is not None:
+            self.im1.pixmapItem.deleteAllMatchingPoint()
+            self.im1.pixmapItem.scene().deleteAllMatchingLine()
+        if self.im2.pixmapItem is not None:
+            self.im2.pixmapItem.deleteAllMatchingPoint()
         self.clean()
 
 

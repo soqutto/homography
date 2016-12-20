@@ -52,8 +52,6 @@ class MyWindow(QMainWindow):
         # Matching processor
         self.controller = MainController()
         self.controller.setParent(self)
-        # Store Image Object
-        self.myImageObjects = [None, None]
 
 
 class MainController(object):
@@ -117,6 +115,8 @@ class MainController(object):
         for (i, obj) in enumerate(self.__myImageObjects):
             if obj is item:
                 self.__myImageObjects[i] = None
+                self.__matchingProcessor.deleteAllMatches()
+
 
     def execMatch(self):
         if self.__matchingProcessor.im1 is None or self.__matchingProcessor.im2 is None:
@@ -481,7 +481,7 @@ class CanvasView(QGraphicsView):
             if imageItem is self.capturedItem:
                 self.scene.removeItem(self.capturedItem)
                 del(self.imageItems[i])
-                self.window().imageUnregist(imageItem.parentImage)
+                MainController().imageUnregist(imageItem.parentImage)
 
     def getZoomState(self):
         return self.zoomState
