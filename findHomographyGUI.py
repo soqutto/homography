@@ -50,26 +50,117 @@ class MyWindow(QMainWindow):
         self.setCentralWidget(self.widget)
 
         # Matching processor
-        #self.routine = Matching
+        self.controller = MainController()
+        self.controller.setParent(self)
         # Store Image Object
         self.myImageObjects = [None, None]
 
+
+class MainController(object):
+    __instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls.__instance == None:
+            cls.__instance = object.__new__(cls)
+
+            cls.__instance.__parentWindow = None
+
+            cls.__instance.__myImageObjects = [None, None]
+            cls.__instance.__matchingProcessor = MatchingProcessor()
+            cls.__instance.__concatenator = None
+            cls.__instance.__concatenateWindow = None
+            cls.__instance.__inputWidget = None
+            cls.__instance.__canvasWidget = None
+            cls.__instance.__canvasView = None
+            cls.__instance.__canvasScene = None
+            cls.__instance.__controlWidget = None
+        return cls.__instance
+
+    def __init__(self):
+        pass
+
+    def setParent(self, widget):
+        self.__parentWindow = widget
+
+    def setConcatenator(self, con):
+        self.__concatenator = con
+
+    def setConcatenatorWindow(self, widget):
+        self.__concatenatorWindow = widget
+
+    def setInputWidget(self, widget):
+        self.__inputWidget = widget
+
+    def setCanvasWidget(self, widget):
+        self.__canvasWidget = widget
+
+    def setCanvasView(self, widget):
+        self.__canvasView = widget
+
+    def setCanvasScene(self, widget):
+        self.__canvasScene = widget
+
+    def setControlWidget(self, widget):
+        self.__controlWidget = widget
+
     def imageRegist(self, pos, filepath):
-        self.myImageObjects[pos] = MyImage(filepath)
+        self.__myImageObjects[pos] = MyImage(filepath)
 
         # Regist image to MatchingProcessor
-        self.findChild(MatchingControlWidget).processor.setImage(\
-                pos, self.myImageObjects[pos])
+        self.__matchingProcessor.setImage(pos, self.__myImageObjects[pos])
 
         # Regist image to CanvasView Widget
-        imageItem = self.findChild(CanvasView).imageAdd(pos, self.myImageObjects[pos])
-        self.myImageObjects[pos].setPixmapItem(imageItem)
+        imageItem = self.__canvasView.imageAdd(pos, self.__myImageObjects[pos])
+        self.__myImageObjects[pos].setPixmapItem(imageItem)
 
     def imageUnregist(self, item):
-        for (i, obj) in enumerate(self.myImageObjects):
+        for (i, obj) in enumerate(self.__myImageObjects):
             if obj is item:
-                self.myImageObjects[i] = None
+                self.__myImageObjects[i] = None
 
+    def execMatch(self):
+        if self.__matchingProcessor.im1 is None or self.__matchingProcessor.im2 is None:
+            print "Warning: some of images are not registered."
+            return
+
+        self.__matchingProcessor.clean()
+
+        self.__matchingProcessor.detect()
+        self.__matchingProcessor.compute()
+
+        if self.__controlWidget.nndrChecked():
+            self.__matchingProcessor.knnMatch()
+            self.__matchingProcessor.nndr(self.__controlWidget.nndrSliderValue())
+        else:
+            self.__matchingProcessor.match()
+
+        self.__matchingProcessor.extractMatches()
+
+        if self.__controlWidget.distanceChecked():
+            self.__matchingProcessor.distanceCutOff(self.__controlWidget.distanceSliderValue())
+        if self.__controlWidget.limitChecked():
+            self.__matchingProcessor.YCutOff(self.__controlWidget.limitSliderValue())
+
+        self.__matchingProcessor.calculateHomography()
+
+        self.__matchingProcessor.drawMatch()
+
+    def execConcatenate(self):
+        self.__concatenator = Concatenator( \
+            self.__matchingProcessor.im1, self.__matchingProcessor.im2, \
+            self.__matchingProcessor.H, self.__matchingProcessor.matchPairs)
+        if self.__concatenateWindow is None:
+            self.__concatenateWindow = ConcatenateWindow(self.__parentWindow)
+            self.__concatenateWindow.show()
+        else:
+            self.__concatenateWindow.show()
+            self.__concatenateWindow.activateWindow()
+
+        img = self.__concatenator.concatenate()
+        self.__concatenateWindow.drawImage(img.getInQPixmap())
+
+    def deleteAllMatches(self):
+        self.__matchingProcessor.deleteAllMatches()
 
 
 class ImageInputWidget(QWidget):
@@ -78,6 +169,9 @@ class ImageInputWidget(QWidget):
 
     def __init__(self, parent=None):
         super(ImageInputWidget, self).__init__(parent)
+
+        # Regist self to MainContorller
+        MainController().setInputWidget(self)
 
         # Widget Parts
         self.labelFile = QLabel("Input File:")
@@ -117,14 +211,18 @@ class ImageInputWidget(QWidget):
 
     # called if fileAddButton pressed
     def imageFileAdd(self):
-        self.window().imageRegist(self.comboBox.currentIndex(), self.input_path)
+        MainController().imageRegist(self.comboBox.currentIndex(), self.input_path)
 
 
 class CanvasWidget(QWidget):
     def __init__(self, parent=None):
         super(CanvasWidget, self).__init__(parent)
+
         # Widget Parts
         self.canvas = CanvasView(self)
+
+        # Regist self to MainContorller
+        MainController().setCanvasWidget(self)
 
         # Widget for Control View
         self.controlGroup = QGroupBox("View Control")
@@ -169,13 +267,8 @@ class MatchingControlWidget(QWidget):
     def __init__(self, parent=None):
         super(MatchingControlWidget, self).__init__(parent)
 
-        #-------------------------------------------------------
-        # MatchingProcessor
-        # Initialization
-        #-------------------------------------------------------
-        self.processor = MatchingProcessor()
-        self.concatenator = None
-        self.subwindow = None
+        # Regist self to MainController
+        MainController().setControlWidget(self)
 
         # Layouts and Widgets Initialize
         self.frameLayout = QVBoxLayout(self)
@@ -269,9 +362,9 @@ class MatchingControlWidget(QWidget):
         self.MatchingExecutionLayout.addWidget(self.execButton4, 1, 0, 1, 3)
 
         # Connect Buttons
-        self.connect(self.execButton1, SIGNAL('clicked()'), self.execMatch)
-        self.connect(self.execButton2, SIGNAL('clicked()'), self.execConcatenate)
-        self.connect(self.execButton3, SIGNAL('clicked()'), self.deleteAllMatches)
+        self.connect(self.execButton1, SIGNAL('clicked()'), MainController().execMatch)
+        self.connect(self.execButton2, SIGNAL('clicked()'), MainController().execConcatenate)
+        self.connect(self.execButton3, SIGNAL('clicked()'), MainController().deleteAllMatches)
 
         #-------------------------------------------------------
         # Matched Point List Section
@@ -334,48 +427,6 @@ class MatchingControlWidget(QWidget):
     def limitSliderValue(self):
         return self.paramSlider3.value() / 100.0
 
-    def execMatch(self):
-        if self.processor.im1 is None or self.processor.im2 is None:
-            print "Warning: some of images are not registered."
-            return
-
-        self.processor.clean()
-
-        self.processor.detect()
-        self.processor.compute()
-
-        if self.nndrChecked():
-            self.processor.knnMatch()
-            self.processor.nndr(self.nndrSliderValue())
-        else:
-            self.processor.match()
-
-        self.processor.extractMatches()
-
-        if self.distanceChecked():
-            self.processor.distanceCutOff(self.distanceSliderValue())
-        if self.limitChecked():
-            self.processor.YCutOff(self.limitSliderValue())
-
-        self.processor.calculateHomography()
-
-        self.processor.drawMatch()
-
-
-    def execConcatenate(self):
-        self.concatenator = Concatenator( \
-            self.processor.im1, self.processor.im2, self.processor.H, self.processor.matchPairs)
-        if self.subwindow is None:
-            self.subwindow = ConcatenateWindow(self)
-            self.subwindow.show()
-        else:
-            self.subwindow.activateWindow()
-
-        img = self.concatenator.concatenate()
-        self.subwindow.drawImage(img.getInQPixmap())
-
-    def deleteAllMatches(self):
-        self.processor.deleteAllMatches()
 
 
 class CanvasView(QGraphicsView):
@@ -396,6 +447,10 @@ class CanvasView(QGraphicsView):
 
     def __init__(self, parent=None):
         super(CanvasView, self).__init__(parent)
+
+        # Regist self to MainController()
+        MainController().setCanvasView(self)
+
         self.scene = CanvasScene(self)
         self.setScene(self.scene)
 
@@ -494,6 +549,9 @@ class CanvasView(QGraphicsView):
 class CanvasScene(QGraphicsScene):
     def __init__(self, parent=None):
         super(CanvasScene, self).__init__(parent)
+
+        # Regist self to MainController()
+        MainController().setCanvasScene(self)
 
         self.matchingLines = []
         self.setBackgroundBrush(QColor(200, 200, 200))
