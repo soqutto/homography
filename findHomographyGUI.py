@@ -644,6 +644,10 @@ class ConcatenateWindow(QWidget):
     def drawImage(self, pixmap):
         self.imageItem.setPixmap(pixmap)
 
+    def closeEvent(self, event):
+        event.ignore()
+        self.hide()
+
 
 
 def main():
