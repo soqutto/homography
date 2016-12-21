@@ -64,6 +64,7 @@ class MainController(object):
             cls.__instance.__parentWindow = None
 
             cls.__instance.__myImageObjects = [None, None]
+            cls.__instance.__concatenateImageObject = None
             cls.__instance.__matchingProcessor = MatchingProcessor()
             cls.__instance.__concatenator = None
             cls.__instance.__concatenateWindow = None
@@ -117,6 +118,10 @@ class MainController(object):
                 self.__myImageObjects[i] = None
                 self.__matchingProcessor.deleteAllMatches()
 
+    def getSide(self, imageObject):
+        for (i, obj) in enumerate(self.__myImageObjects):
+            if obj is imageObject:
+                return i
 
     def execMatch(self):
         if self.__matchingProcessor.im1 is None or self.__matchingProcessor.im2 is None:
@@ -153,15 +158,21 @@ class MainController(object):
 
     def setEnableMatch(self, idx):
         self.__matchingProcessor.matchPairs[idx].enable()
-        matchingLine = self.__myImageObjects[0].pixmapItem.getMatchingLine(idx)
+        matchingLine = self.__myImageObjects[0].pixmapItem.getMatchingPoint(idx).getMatchingLine()
         matchingLine.setColor(self.__matchingProcessor.matchPairs[idx].distanceToHSV())
         matchingLine.status = True
 
     def setDisableMatch(self, idx):
         self.__matchingProcessor.matchPairs[idx].disable()
-        matchingLine = self.__myImageObjects[0].pixmapItem.getMatchingLine(idx)
+        matchingLine = self.__myImageObjects[0].pixmapItem.getMatchingPoint(idx).getMatchingLine()
         matchingLine.setColor(self.__matchingProcessor.matchPairs[idx].distanceToHSV())
         matchingLine.status = False
+
+    def setPoint(self, side, idx, x=None, y=None):
+        self.__matchingProcessor.matchPairs[idx].setPoint(side, x, y)
+
+    def setPointByOffset(self, side, idx, x=None, y=None):
+        self.__matchingProcessor.matchPairs[idx].setPoint(side, x, y)
 
     def execConcatenate(self):
         self.__matchingProcessor.rehashHomography()
@@ -378,7 +389,7 @@ class MatchingControlWidget(QWidget):
         self.MatchingExecutionLayout.addWidget(self.execButton3, 0, 2)
 
         # Match & Concatenate Execution Button
-        self.execButton4 = QPushButton("Match -> Concatenate", self)
+        self.execButton4 = QPushButton("Measure", self)
         self.MatchingExecutionLayout.addWidget(self.execButton4, 1, 0, 1, 3)
 
         # Connect Buttons
@@ -605,8 +616,8 @@ class CanvasScene(QGraphicsScene):
             matchingLine = MatchingLine(i, p1, p2, color)
             self.addItem(matchingLine)
             self.matchingLines.append(matchingLine)
-            p1.group().setMatchingLine(matchingLine)
-            p2.group().setMatchingLine(matchingLine)
+            p1.setMatchingLine(matchingLine)
+            p2.setMatchingLine(matchingLine)
 
     def deleteAllMatchingLine(self):
         for matchingLine in self.matchingLines:
@@ -625,12 +636,10 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
 
         # linked MyImage item
         self.parentImage = myImage
+        self.side = MainController().getSide(myImage)
 
         # Matching point storing array
         self.matchingPoints = []
-
-        # Matching line storing array
-        self.matchingLines = []
 
         # Create an image(base)
         self.pixmapItem = self.parentImage.getInQPixmap()
@@ -646,12 +655,15 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
         self.addToGroup(self.boundaryItem)
 
     def addMatchingPoint(self, idx, x, y):
-        point = MatchingPointHandle(idx, self)
+        point = MatchingPointHandle(self.side, idx, self)
         point.setPos(x, y)
         self.addToGroup(point)
         self.matchingPoints.append(point)
 
         return point
+
+    def getMatchingPoint(self, idx):
+        return self.matchingPoints[idx]
 
     def deleteMatchingPoint(self, idx):
         pass
@@ -693,11 +705,15 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
     Inherited from QGraphicsItemGroup
 """
 class MatchingPointHandle(QGraphicsItemGroup):
-    def __init__(self, idx=None, parent=None):
+    def __init__(self, side, idx, parent=None):
         super(MatchingPointHandle, self).__init__(parent)
 
+        self.side = side
         self.pointID = idx
         self.items = []
+
+        # Pointer to corresponding MatchingLine
+        self.line = None
 
         self.frame = QGraphicsRectItem(QRectF(-5,-5,10,10), self)
         self.frame.setPen(QColor(0,0,0))
@@ -715,6 +731,16 @@ class MatchingPointHandle(QGraphicsItemGroup):
         self.addToGroup(self.vline)
         self.addToGroup(self.hline)
 
+    def moveOffset(self, xdiff, ydiff):
+        x, y = self.pos().x(), self.pos().y()
+        self.setPos(x + xdiff, y + ydiff)
+        self.line.movePos(self.side, xdiff, ydiff)
+
+    def setMatchingLine(self, lineObject):
+        self.line = lineObject
+
+    def getMatchingLine(self):
+        return self.line
 
 """
   class MatchingLine
@@ -734,12 +760,24 @@ class MatchingLine(QGraphicsLineItem):
 
         self.point1_pos = self.point1.mapToScene(0, 0) #QPointF
         self.point2_pos = self.point2.mapToScene(0, 0) #QPointF
-        self.setLine(QLineF(self.point1_pos, self.point2_pos))
+        self.lineF = QLineF(self.point1_pos, self.point2_pos)
+        self.setLine(self.lineF)
 
         if color is None:
             self.setPen(QColor(0,0,0))
         else:
             self.setPen(QColor.fromHsv(color[0], color[1], color[2]))
+
+    def movePos(self, side, xdiff, ydiff):
+        if side == 0:
+            print xdiff, ydiff
+            self.point1_pos = QPointF(self.point1_pos.x() + xdiff, self.point1_pos.y() + ydiff)
+            self.lineF.setP1(self.point1_pos)
+        elif side == 1:
+            self.point2_pos = QPointF(self.point2_pos.x() + xdiff, self.point2_pos.y() + ydiff)
+            self.lineF.setP2(self.point2_pos)
+        self.setLine(self.lineF)
+
 
     def setColor(self, color):
         self.setPen(QColor.fromHsv(color[0], color[1], color[2]))

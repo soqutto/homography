@@ -193,8 +193,8 @@ class MatchingProcessor:
 
     def deleteAllMatches(self):
         if self.im1.pixmapItem is not None:
-            self.im1.pixmapItem.deleteAllMatchingPoint()
             self.im1.pixmapItem.scene().deleteAllMatchingLine()
+            self.im1.pixmapItem.deleteAllMatchingPoint()
         if self.im2.pixmapItem is not None:
             self.im2.pixmapItem.deleteAllMatchingPoint()
         self.clean()
@@ -222,10 +222,10 @@ class MatchPair:
 
     def setPoint(self, index, x=None, y=None):
         # その対応の座標位置を強制的に書き換える
-        # index == 1でpoint1を, index == 2でpoint2を書き換える
-        if index == 1:
+        # index == 0でpoint1を, index == 1でpoint2を書き換える
+        if index == 0:
             p = self.point1
-        elif index == 2:
+        elif index == 1:
             p = self.point2
         else:
             return
@@ -238,9 +238,9 @@ class MatchPair:
     def setPointByOffset(self, index, x=None, y=None):
         # その対応の座標位置を強制的に書き換える
         # setPointの指定方法の代わりに差分(移動量)を用いる
-        if index == 1:
+        if index == 0:
             p = self.point1
-        elif index == 2:
+        elif index == 1:
             p = self.point2
         else:
             return
