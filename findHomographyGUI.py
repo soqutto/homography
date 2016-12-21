@@ -462,7 +462,7 @@ class MatchingControlWidget(QWidget):
 
 class CanvasView(QGraphicsView):
     isPressed = False
-    isDragged = False
+    isHandleDragged = False
 
     imageItems = []
     edgeItems = []
@@ -474,7 +474,6 @@ class CanvasView(QGraphicsView):
 
     currentPos   = None
     x0, y0       = None, None
-    xdiff, ydiff = None, None
 
     zoomState = 0
 
@@ -522,47 +521,48 @@ class CanvasView(QGraphicsView):
     def setZoomState(self, z):
         self.zoomState = z
 
-    def mouseMoveEvent(self, event):
-        if self.isPressed == True:
-            self.isDragged = True
-            self.currentPos = event.pos()
-            x, y = self.currentPos.x(), self.currentPos.y()
-
-        if type(self.capturedItem) is QGraphicsRectItem and \
-           type(self.capturedItem.group()) is TransformableImage:
-            self.xdiff, self.ydiff = x - self.x0, y - self.y0
-            self.capturedItem.group().moveAnchor(self.capturedItem, self.xdiff, self.ydiff)
-            self.x0, self.y0 = x, y
-            return
-
-        super(CanvasView, self).mouseMoveEvent(event)
-
     def mousePressEvent(self, event):
         self.isPressed = True
         self.xdiff, self.ydiff = 0, 0
         
-        self.currentPos = event.pos()
+        self.currentPos = self.mapToScene(event.pos())
         self.x0, self.y0 = self.currentPos.x(), self.currentPos.y()
 
-        print "current pos in view: ", self.currentPos
-        print "current pos in scene: ", self.mapToScene(self.currentPos)
+        print "current pos in view: ", self.mapFromScene(self.currentPos)
+        print "current pos in scene: ", self.currentPos
 
         self.capturedItems =  self.items(event.pos())
         for capturedItem in self.capturedItems:
             if type(capturedItem) == MatchingPointHandle:
                 self.capturedItem = capturedItem
-                print capturedItem.pos()
                 MainController().dumpMatch(capturedItem.pointID)
                 return
 
         # Default Action
         super(CanvasView, self).mousePressEvent(event)
 
+    def mouseMoveEvent(self, event):
+        if self.isPressed == True and type(self.capturedItem) is MatchingPointHandle:
+            self.isHandleDragged = True
+            handle = self.capturedItem
+
+            self.currentPos = self.mapToScene(event.pos())
+            x, y = self.currentPos.x(), self.currentPos.y()
+            xdiff, ydiff = x - self.x0, y - self.y0
+            handle.moveOffset(xdiff, ydiff)
+            self.x0, self.y0 = x, y
+            return
+
+        super(CanvasView, self).mouseMoveEvent(event)
+
     def mouseReleaseEvent(self, event):
-        isPressed = False
-        isDragged = False
+        if self.isHandleDragged == True:
+            handle = self.capturedItem
+            MainController().setPoint(handle.side, handle.pointID, handle.pos().x(), handle.pos().y())
+
+        self.isPressed = False
+        self.isHandleDragged = False
         self.capturedItem = None
-        self.xdiff, self.ydiff = None, None
 
         # Default Action
         super(CanvasView, self).mouseReleaseEvent(event)
@@ -571,22 +571,28 @@ class CanvasView(QGraphicsView):
         cnt = 0
         self.capturedItems = self.scene.items(self.mapToScene(event.pos()))
         if self.capturedItems != []:
-            for item in self.capturedItems:
-                if type(item) is MatchingPointHandle:
-                    idx = item.pointID
-                    if item.group().getMatchingLine(idx).status is True:
-                        self.contextMenuItems.append( \
-                                self.contextMenu.addAction("[#%2d]Disable this Match" % idx))
-                        self.contextMenuItems[cnt].triggered.connect( \
-                                lambda: MainController().setDisableMatch(idx))
-                    elif item.group().getMatchingLine(idx).status is False:
-                        self.contextMenuItems.append( \
-                                self.contextMenu.addAction("[#%2d]Enable this Match" % idx))
-                        self.contextMenuItems[cnt].triggered.connect( \
-                                lambda: MainController().setEnableMatch(idx))
-                    cnt += 1
+            # ContextMenu for ImageWithMatchingPoint
+            for item in [i for i in self.capturedItems if type(i) is ImageWithMatchingPoint]:
+                self.capturedItem = item
+                self.contextMenuItems.append( \
+                        self.contextMenu.addAction("Delete this image"))
+                self.contextMenuItems[cnt].triggered.connect(self.imageDelete)
+                cnt += 1
 
-                #self.capturedItem = self.capturedItems[0].group()
+            # ContextMenu for MatchingPoint
+            for item in [i for i in self.capturedItems if type(i) is MatchingPointHandle]:
+                idx = item.pointID
+                if item.getMatchingLine().status is True:
+                    self.contextMenuItems.append( \
+                            self.contextMenu.addAction("[#%2d]Disable this Match" % idx))
+                    self.contextMenuItems[cnt].triggered.connect( \
+                            lambda: MainController().setDisableMatch(idx))
+                elif item.getMatchingLine().status is False:
+                    self.contextMenuItems.append( \
+                            self.contextMenu.addAction("[#%2d]Enable this Match" % idx))
+                    self.contextMenuItems[cnt].triggered.connect( \
+                            lambda: MainController().setEnableMatch(idx))
+                cnt += 1
 
         self.contextMenu.exec_(self.mapToGlobal(event.pos()))
         self.contextMenu.clear()
@@ -668,25 +674,13 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
     def deleteMatchingPoint(self, idx):
         pass
 
-    def setMatchingLine(self, line):
-        self.matchingLines.append(line)
-
-    def getMatchingLine(self, idx):
-        for matchingLine in self.matchingLines:
-            if matchingLine.lineID == idx:
-                return matchingLine
-            else:
-                continue
-        return None
-
     def deleteAllMatchingPoint(self):
         if self.matchingPoints != []:
-            for (matchingPoint, matchingLine) in zip(self.matchingPoints, self.matchingLines):
-                self.removeFromGroup(matchingPoint)
-                self.removeFromGroup(matchingLine)
+            for match in self.matchingPoints:
+                self.removeFromGroup(match)
+                self.scene().removeItem(match)
             self.update()
             self.matchingPoints = []
-            self.matchingLines = []
 
 
     def mouseMoveEvent(self, event):
