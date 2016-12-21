@@ -568,13 +568,12 @@ class CanvasView(QGraphicsView):
                                 self.contextMenu.addAction("[#%2d]Disable this Match" % idx))
                         self.contextMenuItems[cnt].triggered.connect( \
                                 lambda: MainController().setDisableMatch(idx))
-                        cnt += 1
-                    else:
+                    elif item.group().getMatchingLine(idx).status is False:
                         self.contextMenuItems.append( \
                                 self.contextMenu.addAction("[#%2d]Enable this Match" % idx))
                         self.contextMenuItems[cnt].triggered.connect( \
                                 lambda: MainController().setEnableMatch(idx))
-                        cnt += 1
+                    cnt += 1
 
                 #self.capturedItem = self.capturedItems[0].group()
 
