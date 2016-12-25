@@ -464,6 +464,12 @@ class MatchingControlWidget(QWidget):
 class CanvasView(QGraphicsView):
     isPressed = False
     isHandleDragged = False
+    isPolygonMode = False
+
+    cachedPolygon = None
+    cachedPolygon_HandleItems = []
+    cachedPolygon_LineItems = []
+    pointerH, pointerV = None, None
 
     imageItems = []
     edgeItems = []
@@ -522,6 +528,50 @@ class CanvasView(QGraphicsView):
     def setZoomState(self, z):
         self.zoomState = z
 
+    def addPolygonInit(self):
+        self.isPolygonMode = True
+        self.cachedPolygon = QPolygonF()
+
+    def addPolygonAbort(self):
+        self.isPolygonMode = False
+        self.cachedPolygon = None
+        self.removeLinePointer()
+
+    def deletePolygon(self):
+        pass
+
+    def refreshCurrentLine(self, pos):
+        if self.cachedPolygon_LineItems != []:
+            currentLineItem = self.cachedPolygon_LineItems[-1]
+            line = currentLineItem.line()
+            line.setP2(pos)
+            currentLineItem.setLine(line)
+
+    def removeAllCachedPolygon(self):
+        for item in self.cachedPolygon_HandleItems:
+            self.scene.removeItem(item)
+        for item in self.cachedPolygon_LineItems:
+            self.scene.removeItem(item)
+        self.cachedPolygon_HandleItems = []
+        self.cachedPolygon_LineItems = []
+
+    def drawLinePointer(self, pos):
+        self.removeLinePointer()
+
+        left, top = self.sceneRect().x(), self.sceneRect().y()
+        w, h = self.sceneRect().width(), self.sceneRect().height()
+        x, y = pos.x(), pos.y()
+
+        self.pointerH = self.scene.addLine(left, y, left+w, y)
+        self.pointerV = self.scene.addLine(x, top, x, top+h)
+
+    def removeLinePointer(self):
+        if self.pointerH is not None:
+            self.scene.removeItem(self.pointerH)
+        if self.pointerV is not None:
+            self.scene.removeItem(self.pointerV)
+        self.scene.update()
+
     def mousePressEvent(self, event):
         self.isPressed = True
         self.xdiff, self.ydiff = 0, 0
@@ -533,10 +583,37 @@ class CanvasView(QGraphicsView):
         print "current pos in scene: ", self.currentPos
 
         self.capturedItems =  self.items(event.pos())
+        capturedItemTypes = map(type, self.capturedItems)
         for capturedItem in self.capturedItems:
             if type(capturedItem) == MatchingPointHandle:
                 self.capturedItem = capturedItem
                 MainController().dumpMatch(capturedItem.pointID)
+                return
+            if type(capturedItem) == ImageWithMatchingPoint:
+                self.capturedItem = capturedItem
+                currentPos_inImage = capturedItem.mapFromScene(self.currentPos)
+                print "current pos in imageItem: ", currentPos_inImage
+                if self.isPolygonMode:
+                    if not (PolygonHandle in capturedItemTypes):
+                        self.cachedPolygon.append(currentPos_inImage)
+
+                        handle = PolygonHandle(0, \
+                          0 if self.cachedPolygon_HandleItems == [] else len(self.cachedPolygon_HandleItems))
+                        handle.setPos(self.currentPos)
+                        self.scene.addItem(handle)
+                        self.cachedPolygon_HandleItems.append(handle)
+
+                        self.refreshCurrentLine(self.currentPos)
+                        edge = QGraphicsLineItem(QLineF(self.currentPos, self.currentPos))
+                        self.scene.addItem(edge)
+                        self.cachedPolygon_LineItems.append(edge)
+                    else:
+                        self.cachedPolygon.append(self.cachedPolygon.at(0))
+                        self.capturedItem.setPolygon(self.cachedPolygon)
+
+                        self.removeAllCachedPolygon()
+                        self.removeLinePointer()
+                        self.isPolygonMode = False
                 return
 
         # Default Action
@@ -553,6 +630,12 @@ class CanvasView(QGraphicsView):
             handle.moveOffset(xdiff, ydiff)
             self.x0, self.y0 = x, y
             return
+
+        if self.isPolygonMode:
+            self.currentPos = self.mapToScene(event.pos())
+            self.drawLinePointer(self.currentPos)
+            self.refreshCurrentLine(self.currentPos)
+
 
         super(CanvasView, self).mouseMoveEvent(event)
 
@@ -577,7 +660,15 @@ class CanvasView(QGraphicsView):
                 self.capturedItem = item
                 self.contextMenuItems.append( \
                         self.contextMenu.addAction("Delete this image"))
+                self.contextMenuItems.append( \
+                        self.contextMenu.addAction("Add Polygon..."))
+                self.contextMenuItems.append( \
+                        self.contextMenu.addAction("Delete Polygon"))
                 self.contextMenuItems[cnt].triggered.connect(self.imageDelete)
+                cnt += 1
+                self.contextMenuItems[cnt].triggered.connect(self.addPolygonInit)
+                cnt += 1
+                self.contextMenuItems[cnt].triggered.connect(item.deletePolygon)
                 cnt += 1
 
             # ContextMenu for MatchingPoint
@@ -648,6 +739,9 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
         # Matching point storing array
         self.matchingPoints = []
 
+        # Matching area specification
+        self.matchingPolygon = None
+
         # Create an image(base)
         self.pixmapItem = self.parentImage.getInQPixmap()
         self.imageItem = QGraphicsPixmapItem(self.pixmapItem, self)
@@ -656,6 +750,9 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
         self.imageShape = self.imageItem.shape()
         self.imagePolygon = self.imageShape.toFillPolygon()
         self.boundaryItem = QGraphicsPolygonItem(self.imagePolygon, self)
+
+        # Store slice polygon
+        self.slicePolygonItem = None
 
         # Add any child items to group
         self.addToGroup(self.imageItem)
@@ -683,6 +780,18 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
             self.update()
             self.matchingPoints = []
 
+    def setPolygon(self, polygon):
+        self.slicePolygonItem = QGraphicsPolygonItem(polygon, self)
+        self.slicePolygonItem.setPen(QColor(200,80,0))
+        self.addToGroup(self.slicePolygonItem)
+        self.parentImage.setSlice(polygon)
+        self.parentImage.getSlicedInQImage().save("debug.png")
+
+    def deletePolygon(self):
+        self.removeFromGroup(self.slicePolygonItem)
+        self.scene().removeItem(self.slicePolygonItem)
+        self.slicePolygonItem = None
+        self.parentImage.unsetSlice()
 
     def mouseMoveEvent(self, event):
         super(ImageWithMatchingPoint, self).mouseMoveEvent(event)
@@ -695,7 +804,30 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
 
 
 """
-  class MatchingPointHandle
+  class SlicePolygonItem
+    Group Object of QGraphicsRectItem, QGraphicsLineItem
+"""
+#class SlicePolygonItem(QGraphicsItemGroup):
+#    def __init__(self, side, polygon, parent=None):
+#        super(SlicePolygonItem, self).__init__(parent)
+#        self.anchorItems = []
+#        self.edgeItems = []
+#
+#        if type(polygon) in (QPolygonF, QPolygon):
+#            for i in range(0, polygon.count() - 1):
+#                anchor = PolygonHandle(side, i)
+#                anchor.setPos(polygon.at(i))
+#                self.anchorItems.append(anchor)
+#                self.addToGroup(anchor)
+#            for i in range(0, polygon.count() - 1):
+#                if i <= polygon.count() - 3:
+#                    line = PolygonEdgeLine(i, self.anchorItems[i], self.anchorItems[i+1])
+#                else:
+#                    line = PolygonEdgeLine(i, self.anchorItems[i], self.anchorItems[0])
+#                self.edgeItems.append(line)
+#                self.addToGroup(line)
+
+
     Group Object of QGraphicsRectItem, QGraphicsLineItem
     Inherited from QGraphicsItemGroup
 """
@@ -737,35 +869,46 @@ class MatchingPointHandle(QGraphicsItemGroup):
     def getMatchingLine(self):
         return self.line
 
+
 """
-  class MatchingLine
+  class PolygonHandle
+    Group Object of QGraphicsRectItem, QGraphicsLineItem
+    Inherited from DraggableHandle
+"""
+class PolygonHandle(DraggableHandle):
+    def __init__(self, side, idx, parent=None):
+        super(PolygonHandle, self).__init__(side, parent)
+
+        self.pointID = idx
+        self.lineFrom = None
+        self.lineTo = None
+
+    def moveOffset(self, xdiff, ydiff):
+        super(MatchingPointHandle, self).moveOffset(xdiff, ydiff)
+
+
+"""
+  class DependentLineItem
     Line Object contains both side of nodes
     Inherited from QGraphicsLineItem
 """
-class MatchingLine(QGraphicsLineItem):
-    def __init__(self, idx=None, p1=None, p2=None, color=None, parent=None):
-        super(MatchingLine, self).__init__(parent)
+class DependentLineItem(QGraphicsLineItem):
+    def __init__(self, p1=None, p2=None, parent=None):
+        super(DependentLineItem, self).__init__(parent)
         # set two MatchingPointHandle instances
         self.point1 = p1 # origin
         self.point2 = p2 # terminal
 
-        # MatchingLine number
-        self.lineID = idx
-        self.status = MainController().isAcceptedMatch(idx)
+        if self.point1 is not None:
+            self.point1_pos = self.point1.mapToScene(0, 0) #QPointF
+        if self.point2 is not None:
+            self.point2_pos = self.point2.mapToScene(0, 0) #QPointF
 
-        self.point1_pos = self.point1.mapToScene(0, 0) #QPointF
-        self.point2_pos = self.point2.mapToScene(0, 0) #QPointF
         self.lineF = QLineF(self.point1_pos, self.point2_pos)
         self.setLine(self.lineF)
 
-        if color is None:
-            self.setPen(QColor(0,0,0))
-        else:
-            self.setPen(QColor.fromHsv(color[0], color[1], color[2]))
-
     def movePos(self, side, xdiff, ydiff):
         if side == 0:
-            print xdiff, ydiff
             self.point1_pos = QPointF(self.point1_pos.x() + xdiff, self.point1_pos.y() + ydiff)
             self.lineF.setP1(self.point1_pos)
         elif side == 1:
@@ -777,6 +920,20 @@ class MatchingLine(QGraphicsLineItem):
     def setColor(self, color):
         self.setPen(QColor.fromHsv(color[0], color[1], color[2]))
 
+
+"""
+  class PolygonEdgeLine
+    Line Object contains previous/next nodes
+    Inherited fro DependentLineItem
+"""
+class PolygonEdgeLine(DependentLineItem):
+    def __init__(self, idx=None, p1=None, p2=None, color=None, parent=None):
+        super(PolygonEdgeLine, self).__init__(p1, p2, parent)
+
+        # PolygonEdgeLine number
+        self.lineID = idx
+
+        self.setPen(QColor(160,80,0))
 
 class ConcatenateWindow(QWidget):
     def __init__(self, parent=None):
