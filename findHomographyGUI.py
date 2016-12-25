@@ -15,6 +15,7 @@ import cv2
 from module_core.Image import *
 from module_core.Matcher import *
 from module_core.Concatenate import *
+from module_core.Measure import *
 
 class MyWindow(QMainWindow):
     def __init__(self):
@@ -52,8 +53,6 @@ class MyWindow(QMainWindow):
         # Matching processor
         self.controller = MainController()
         self.controller.setParent(self)
-        # Store Image Object
-        self.myImageObjects = [None, None]
 
 
 class MainController(object):
@@ -66,9 +65,14 @@ class MainController(object):
             cls.__instance.__parentWindow = None
 
             cls.__instance.__myImageObjects = [None, None]
+            cls.__instance.__concatenatedImageObject = None
+            cls.__instance.__measuredImageObject = None
+
             cls.__instance.__matchingProcessor = MatchingProcessor()
             cls.__instance.__concatenator = None
             cls.__instance.__concatenateWindow = None
+            cls.__instance.__measurer = None
+            cls.__instance.__measureWindow = None
             cls.__instance.__inputWidget = None
             cls.__instance.__canvasWidget = None
             cls.__instance.__canvasView = None
@@ -85,23 +89,56 @@ class MainController(object):
     def setConcatenator(self, con):
         self.__concatenator = con
 
-    def setConcatenatorWindow(self, widget):
-        self.__concatenatorWindow = widget
+    def concatenator(self):
+        return self.__concatenator
+
+    def setConcatenateWindow(self, widget):
+        self.__concatenateWindow = widget
+
+    def concatenateWindow(self):
+        return self.__concatenateWindow
+
+    def setMeasurer(self, mes):
+        self.__measurer = mes
+
+    def measurer(self):
+        return self.__measurer
+
+    def setMeasureWindow(self, widget):
+        self.__measureWindow = widget
+
+    def measureWindow(self):
+        return self.__measureWindow
 
     def setInputWidget(self, widget):
         self.__inputWidget = widget
 
+    def inputWidget(self):
+        return self.__inputWidget
+
     def setCanvasWidget(self, widget):
         self.__canvasWidget = widget
+
+    def canvasWidget(self):
+        return self.__canvasWidget
 
     def setCanvasView(self, widget):
         self.__canvasView = widget
 
+    def canvasView(self):
+        return self.__canvasView
+
     def setCanvasScene(self, widget):
         self.__canvasScene = widget
 
+    def canvasScene(self):
+        return self.__canvasScene
+
     def setControlWidget(self, widget):
         self.__controlWidget = widget
+
+    def controlWidget(self):
+        return self.__controlWidget
 
     def imageRegist(self, pos, filepath):
         self.__myImageObjects[pos] = MyImage(filepath)
@@ -117,6 +154,21 @@ class MainController(object):
         for (i, obj) in enumerate(self.__myImageObjects):
             if obj is item:
                 self.__myImageObjects[i] = None
+                self.__matchingProcessor.deleteAllMatches()
+
+    def getMyImageObject(self, side):
+        if side == 0 or side == 1:
+            return self.__myImageObjects[side]
+        else:
+            return None
+
+    def getConcatenatedImageObject(self):
+        return self.__concatenatedImageObject
+
+    def getSide(self, imageObject):
+        for (i, obj) in enumerate(self.__myImageObjects):
+            if obj is imageObject:
+                return i
 
     def execMatch(self):
         if self.__matchingProcessor.im1 is None or self.__matchingProcessor.im2 is None:
@@ -145,7 +197,32 @@ class MainController(object):
 
         self.__matchingProcessor.drawMatch()
 
+    def isAcceptedMatch(self, idx):
+        return self.__matchingProcessor.matchPairs[idx].isAccepted()
+
+    def dumpMatch(self, idx=None):
+        self.__matchingProcessor.dumpMatch(idx)
+
+    def setEnableMatch(self, idx):
+        self.__matchingProcessor.matchPairs[idx].enable()
+        matchingLine = self.__myImageObjects[0].pixmapItem.getMatchingPoint(idx).getMatchingLine()
+        matchingLine.setColor(self.__matchingProcessor.matchPairs[idx].distanceToHSV())
+        matchingLine.status = True
+
+    def setDisableMatch(self, idx):
+        self.__matchingProcessor.matchPairs[idx].disable()
+        matchingLine = self.__myImageObjects[0].pixmapItem.getMatchingPoint(idx).getMatchingLine()
+        matchingLine.setColor(self.__matchingProcessor.matchPairs[idx].distanceToHSV())
+        matchingLine.status = False
+
+    def setPoint(self, side, idx, x=None, y=None):
+        self.__matchingProcessor.matchPairs[idx].setPoint(side, x, y)
+
+    def setPointByOffset(self, side, idx, x=None, y=None):
+        self.__matchingProcessor.matchPairs[idx].setPoint(side, x, y)
+
     def execConcatenate(self):
+        self.__matchingProcessor.rehashHomography()
         self.__concatenator = Concatenator( \
             self.__matchingProcessor.im1, self.__matchingProcessor.im2, \
             self.__matchingProcessor.H, self.__matchingProcessor.matchPairs)
@@ -157,10 +234,32 @@ class MainController(object):
             self.__concatenateWindow.activateWindow()
 
         img = self.__concatenator.concatenate()
+        self.setConcatenatedImage(img)
         self.__concatenateWindow.drawImage(img.getInQPixmap())
+
+    def setConcatenatedImage(self, img):
+        self.__concatenatedImageObject = img
+
+    def getConcatenatedImage(self):
+        return self.__concatenatedImageObject
+
+    def setMeasuredImage(self, img):
+        self.__measuredImageObject = img
+
+    def getMeasuredImage(self, img):
+        return self.__measuredImageObject
 
     def deleteAllMatches(self):
         self.__matchingProcessor.deleteAllMatches()
+
+    def execMeasure(self):
+        if self.__measureWindow is None:
+            self.__measurer = Measure()
+            self.__measureWindow = MeasureWindow(self.__parentWindow)
+            self.__measureWindow.show()
+        else:
+            self.__measureWindow.show()
+            self.__measureWindow.activateWindow()
 
 
 class ImageInputWidget(QWidget):
@@ -358,13 +457,14 @@ class MatchingControlWidget(QWidget):
         self.MatchingExecutionLayout.addWidget(self.execButton3, 0, 2)
 
         # Match & Concatenate Execution Button
-        self.execButton4 = QPushButton("Match -> Concatenate", self)
+        self.execButton4 = QPushButton("Measure", self)
         self.MatchingExecutionLayout.addWidget(self.execButton4, 1, 0, 1, 3)
 
         # Connect Buttons
         self.connect(self.execButton1, SIGNAL('clicked()'), MainController().execMatch)
         self.connect(self.execButton2, SIGNAL('clicked()'), MainController().execConcatenate)
         self.connect(self.execButton3, SIGNAL('clicked()'), MainController().deleteAllMatches)
+        self.connect(self.execButton4, SIGNAL('clicked()'), MainController().execMeasure)
 
         #-------------------------------------------------------
         # Matched Point List Section
@@ -431,7 +531,13 @@ class MatchingControlWidget(QWidget):
 
 class CanvasView(QGraphicsView):
     isPressed = False
-    isDragged = False
+    isHandleDragged = False
+    isPolygonMode = False
+
+    cachedPolygon = None
+    cachedPolygon_HandleItems = []
+    cachedPolygon_LineItems = []
+    pointerH, pointerV = None, None
 
     imageItems = []
     edgeItems = []
@@ -439,9 +545,10 @@ class CanvasView(QGraphicsView):
     capturedItems = []
     capturedItem  = None
 
+    contextMenuItems = []
+
     currentPos   = None
     x0, y0       = None, None
-    xdiff, ydiff = None, None
 
     zoomState = 0
 
@@ -457,9 +564,9 @@ class CanvasView(QGraphicsView):
         self.setMouseTracking(True)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
         self.contextMenu = QMenu();
-        self.contextMenuAction1 = self.contextMenu.addAction("Delete item")
+        #self.contextMenuAction1 = self.contextMenu.addAction("Delete item")
 
-        self.connect(self.contextMenuAction1, SIGNAL('triggered()'), self.imageDelete)
+        #self.connect(self.contextMenuAction1, SIGNAL('triggered()'), self.imageDelete)
 
     # called if FileAddButton pressed
     def imageAdd(self, pos, myImageItem):
@@ -481,7 +588,7 @@ class CanvasView(QGraphicsView):
             if imageItem is self.capturedItem:
                 self.scene.removeItem(self.capturedItem)
                 del(self.imageItems[i])
-                self.window().imageUnregist(imageItem.parentImage)
+                MainController().imageUnregist(imageItem.parentImage)
 
     def getZoomState(self):
         return self.zoomState
@@ -489,58 +596,169 @@ class CanvasView(QGraphicsView):
     def setZoomState(self, z):
         self.zoomState = z
 
-    def mouseMoveEvent(self, event):
-        if self.isPressed == True:
-            self.isDragged = True
-            self.currentPos = event.pos()
-            x, y = self.currentPos.x(), self.currentPos.y()
+    def addPolygonInit(self):
+        self.isPolygonMode = True
+        self.cachedPolygon = QPolygonF()
 
-        if type(self.capturedItem) is QGraphicsRectItem and \
-           type(self.capturedItem.group()) is TransformableImage:
-            self.xdiff, self.ydiff = x - self.x0, y - self.y0
-            self.capturedItem.group().moveAnchor(self.capturedItem, self.xdiff, self.ydiff)
-            self.x0, self.y0 = x, y
-            return
+    def addPolygonAbort(self):
+        self.isPolygonMode = False
+        self.cachedPolygon = None
+        self.removeLinePointer()
 
-        super(CanvasView, self).mouseMoveEvent(event)
+    def deletePolygon(self):
+        pass
+
+    def refreshCurrentLine(self, pos):
+        if self.cachedPolygon_LineItems != []:
+            currentLineItem = self.cachedPolygon_LineItems[-1]
+            line = currentLineItem.line()
+            line.setP2(pos)
+            currentLineItem.setLine(line)
+
+    def removeAllCachedPolygon(self):
+        for item in self.cachedPolygon_HandleItems:
+            self.scene.removeItem(item)
+        for item in self.cachedPolygon_LineItems:
+            self.scene.removeItem(item)
+        self.cachedPolygon_HandleItems = []
+        self.cachedPolygon_LineItems = []
+
+    def drawLinePointer(self, pos):
+        self.removeLinePointer()
+
+        left, top = self.sceneRect().x(), self.sceneRect().y()
+        w, h = self.sceneRect().width(), self.sceneRect().height()
+        x, y = pos.x(), pos.y()
+
+        self.pointerH = self.scene.addLine(left, y, left+w, y)
+        self.pointerV = self.scene.addLine(x, top, x, top+h)
+
+    def removeLinePointer(self):
+        if self.pointerH is not None:
+            self.scene.removeItem(self.pointerH)
+        if self.pointerV is not None:
+            self.scene.removeItem(self.pointerV)
+        self.scene.update()
 
     def mousePressEvent(self, event):
         self.isPressed = True
         self.xdiff, self.ydiff = 0, 0
         
-        self.currentPos = event.pos()
+        self.currentPos = self.mapToScene(event.pos())
         self.x0, self.y0 = self.currentPos.x(), self.currentPos.y()
 
-        print "current pos in view: ", self.currentPos
-        print "current pos in scene: ", self.mapToScene(self.currentPos)
+        print "current pos in view: ", self.mapFromScene(self.currentPos)
+        print "current pos in scene: ", self.currentPos
 
         self.capturedItems =  self.items(event.pos())
+        capturedItemTypes = map(type, self.capturedItems)
         for capturedItem in self.capturedItems:
+            if type(capturedItem) == MatchingPointHandle:
+                self.capturedItem = capturedItem
+                MainController().dumpMatch(capturedItem.pointID)
+                return
             if type(capturedItem) == ImageWithMatchingPoint:
                 self.capturedItem = capturedItem
+                currentPos_inImage = capturedItem.mapFromScene(self.currentPos)
+                print "current pos in imageItem: ", currentPos_inImage
+                if self.isPolygonMode:
+                    if not (PolygonHandle in capturedItemTypes):
+                        self.cachedPolygon.append(currentPos_inImage)
+
+                        handle = PolygonHandle(0, \
+                          0 if self.cachedPolygon_HandleItems == [] else len(self.cachedPolygon_HandleItems))
+                        handle.setPos(self.currentPos)
+                        self.scene.addItem(handle)
+                        self.cachedPolygon_HandleItems.append(handle)
+
+                        self.refreshCurrentLine(self.currentPos)
+                        edge = QGraphicsLineItem(QLineF(self.currentPos, self.currentPos))
+                        self.scene.addItem(edge)
+                        self.cachedPolygon_LineItems.append(edge)
+                    else:
+                        self.cachedPolygon.append(self.cachedPolygon.at(0))
+                        self.capturedItem.setPolygon(self.cachedPolygon)
+
+                        self.removeAllCachedPolygon()
+                        self.removeLinePointer()
+                        self.isPolygonMode = False
                 return
 
         # Default Action
         super(CanvasView, self).mousePressEvent(event)
 
+    def mouseMoveEvent(self, event):
+        if self.isPressed == True and type(self.capturedItem) is MatchingPointHandle:
+            self.isHandleDragged = True
+            handle = self.capturedItem
+
+            self.currentPos = self.mapToScene(event.pos())
+            x, y = self.currentPos.x(), self.currentPos.y()
+            xdiff, ydiff = x - self.x0, y - self.y0
+            handle.moveOffset(xdiff, ydiff)
+            self.x0, self.y0 = x, y
+            return
+
+        if self.isPolygonMode:
+            self.currentPos = self.mapToScene(event.pos())
+            self.drawLinePointer(self.currentPos)
+            self.refreshCurrentLine(self.currentPos)
+
+
+        super(CanvasView, self).mouseMoveEvent(event)
+
     def mouseReleaseEvent(self, event):
-        isPressed = False
-        isDragged = False
+        if self.isHandleDragged == True:
+            handle = self.capturedItem
+            MainController().setPoint(handle.side, handle.pointID, handle.pos().x(), handle.pos().y())
+
+        self.isPressed = False
+        self.isHandleDragged = False
         self.capturedItem = None
-        self.xdiff, self.ydiff = None, None
 
         # Default Action
         super(CanvasView, self).mouseReleaseEvent(event)
 
     def contextMenuEvent(self, event):
+        cnt = 0
         self.capturedItems = self.scene.items(self.mapToScene(event.pos()))
         if self.capturedItems != []:
-            if MatchingPointHandle in map(type, self.capturedItems):
-                pass
+            # ContextMenu for ImageWithMatchingPoint
+            for item in [i for i in self.capturedItems if type(i) is ImageWithMatchingPoint]:
+                self.capturedItem = item
+                self.contextMenuItems.append( \
+                        self.contextMenu.addAction("Delete this image"))
+                self.contextMenuItems.append( \
+                        self.contextMenu.addAction("Add Polygon..."))
+                self.contextMenuItems.append( \
+                        self.contextMenu.addAction("Delete Polygon"))
+                self.contextMenuItems[cnt].triggered.connect(self.imageDelete)
+                cnt += 1
+                self.contextMenuItems[cnt].triggered.connect(self.addPolygonInit)
+                cnt += 1
+                self.contextMenuItems[cnt].triggered.connect(item.deletePolygon)
+                cnt += 1
 
-                #self.capturedItem = self.capturedItems[0].group()
+            # ContextMenu for MatchingPoint
+            for item in [i for i in self.capturedItems if type(i) is MatchingPointHandle]:
+                idx = item.pointID
+                if item.getMatchingLine().status is True:
+                    self.contextMenuItems.append( \
+                            self.contextMenu.addAction("[#%2d]Disable this Match" % idx))
+                    self.contextMenuItems[cnt].triggered.connect( \
+                            lambda: MainController().setDisableMatch(idx))
+                elif item.getMatchingLine().status is False:
+                    self.contextMenuItems.append( \
+                            self.contextMenu.addAction("[#%2d]Enable this Match" % idx))
+                    self.contextMenuItems[cnt].triggered.connect( \
+                            lambda: MainController().setEnableMatch(idx))
+                cnt += 1
 
         self.contextMenu.exec_(self.mapToGlobal(event.pos()))
+        self.contextMenu.clear()
+        self.contextMenuItems = []
+
+        MainController().dumpMatch()
 
         self.capturedItems = []
         self.capturedItem = None
@@ -564,8 +782,8 @@ class CanvasScene(QGraphicsScene):
             matchingLine = MatchingLine(i, p1, p2, color)
             self.addItem(matchingLine)
             self.matchingLines.append(matchingLine)
-            p1.group().setMatchingLine(matchingLine)
-            p2.group().setMatchingLine(matchingLine)
+            p1.setMatchingLine(matchingLine)
+            p2.setMatchingLine(matchingLine)
 
     def deleteAllMatchingLine(self):
         for matchingLine in self.matchingLines:
@@ -584,12 +802,13 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
 
         # linked MyImage item
         self.parentImage = myImage
+        self.side = MainController().getSide(myImage)
 
         # Matching point storing array
         self.matchingPoints = []
 
-        # Matching line storing array
-        self.matchingLines = []
+        # Matching area specification
+        self.matchingPolygon = None
 
         # Create an image(base)
         self.pixmapItem = self.parentImage.getInQPixmap()
@@ -600,33 +819,47 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
         self.imagePolygon = self.imageShape.toFillPolygon()
         self.boundaryItem = QGraphicsPolygonItem(self.imagePolygon, self)
 
+        # Store slice polygon
+        self.slicePolygonItem = None
+
         # Add any child items to group
         self.addToGroup(self.imageItem)
         self.addToGroup(self.boundaryItem)
 
     def addMatchingPoint(self, idx, x, y):
-        point = MatchingPointHandle(idx, self)
+        point = MatchingPointHandle(self.side, idx, self)
         point.setPos(x, y)
         self.addToGroup(point)
         self.matchingPoints.append(point)
 
         return point
 
+    def getMatchingPoint(self, idx):
+        return self.matchingPoints[idx]
+
     def deleteMatchingPoint(self, idx):
         pass
 
-    def setMatchingLine(self, line):
-        self.matchingLines.append(line)
-
     def deleteAllMatchingPoint(self):
         if self.matchingPoints != []:
-            for (matchingPoint, matchingLine) in zip(self.matchingPoints, self.matchingLines):
-                self.removeFromGroup(matchingPoint)
-                self.removeFromGroup(matchingLine)
+            for match in self.matchingPoints:
+                self.removeFromGroup(match)
+                self.scene().removeItem(match)
             self.update()
             self.matchingPoints = []
-            self.matchingLines = []
 
+    def setPolygon(self, polygon):
+        self.slicePolygonItem = QGraphicsPolygonItem(polygon, self)
+        self.slicePolygonItem.setPen(QColor(200,80,0))
+        self.addToGroup(self.slicePolygonItem)
+        self.parentImage.setSlice(polygon)
+        self.parentImage.getSlicedInQImage().save("debug.png")
+
+    def deletePolygon(self):
+        self.removeFromGroup(self.slicePolygonItem)
+        self.scene().removeItem(self.slicePolygonItem)
+        self.slicePolygonItem = None
+        self.parentImage.unsetSlice()
 
     def mouseMoveEvent(self, event):
         super(ImageWithMatchingPoint, self).mouseMoveEvent(event)
@@ -639,14 +872,42 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
 
 
 """
-  class MatchingPointHandle
+  class SlicePolygonItem
+    Group Object of QGraphicsRectItem, QGraphicsLineItem
+"""
+#class SlicePolygonItem(QGraphicsItemGroup):
+#    def __init__(self, side, polygon, parent=None):
+#        super(SlicePolygonItem, self).__init__(parent)
+#        self.anchorItems = []
+#        self.edgeItems = []
+#
+#        if type(polygon) in (QPolygonF, QPolygon):
+#            for i in range(0, polygon.count() - 1):
+#                anchor = PolygonHandle(side, i)
+#                anchor.setPos(polygon.at(i))
+#                self.anchorItems.append(anchor)
+#                self.addToGroup(anchor)
+#            for i in range(0, polygon.count() - 1):
+#                if i <= polygon.count() - 3:
+#                    line = PolygonEdgeLine(i, self.anchorItems[i], self.anchorItems[i+1])
+#                else:
+#                    line = PolygonEdgeLine(i, self.anchorItems[i], self.anchorItems[0])
+#                self.edgeItems.append(line)
+#                self.addToGroup(line)
+
+
+"""
+  class DraggableHandle
     Group Object of QGraphicsRectItem, QGraphicsLineItem
     Inherited from QGraphicsItemGroup
+    Abstract Class of MatchingPointHandle
 """
-class MatchingPointHandle(QGraphicsItemGroup):
-    def __init__(self, idx=None, parent=None):
-        super(MatchingPointHandle, self).__init__(parent)
 
+class DraggableHandle(QGraphicsItemGroup):
+    def __init__(self, side, parent=None):
+        super(DraggableHandle, self).__init__(parent)
+
+        self.side = side
         self.items = []
 
         self.frame = QGraphicsRectItem(QRectF(-5,-5,10,10), self)
@@ -665,29 +926,123 @@ class MatchingPointHandle(QGraphicsItemGroup):
         self.addToGroup(self.vline)
         self.addToGroup(self.hline)
 
+    def moveOffset(self, xdiff, ydiff):
+        x, y = self.pos().x(), self.pos().y()
+        self.setPos(x + xdiff, y + ydiff)
+
 
 """
-  class MatchingLine
+  class MatchingPointHandle
+    Group Object of QGraphicsRectItem, QGraphicsLineItem
+    Inherited from DraggableHandle
+"""
+class MatchingPointHandle(DraggableHandle):
+    def __init__(self, side, idx, parent=None):
+        super(MatchingPointHandle, self).__init__(side, parent)
+
+        self.pointID = idx
+
+        # Pointer to corresponding MatchingLine
+        self.line = None
+
+    def moveOffset(self, xdiff, ydiff):
+        super(MatchingPointHandle, self).moveOffset(xdiff, ydiff)
+        self.line.movePos(self.side, xdiff, ydiff)
+
+    def setMatchingLine(self, lineObject):
+        self.line = lineObject
+
+    def getMatchingLine(self):
+        return self.line
+
+
+"""
+  class PolygonHandle
+    Group Object of QGraphicsRectItem, QGraphicsLineItem
+    Inherited from DraggableHandle
+"""
+class PolygonHandle(DraggableHandle):
+    def __init__(self, side, idx, parent=None):
+        super(PolygonHandle, self).__init__(side, parent)
+
+        self.pointID = idx
+        self.lineFrom = None
+        self.lineTo = None
+
+    def moveOffset(self, xdiff, ydiff):
+        super(MatchingPointHandle, self).moveOffset(xdiff, ydiff)
+
+
+"""
+  class DependentLineItem
     Line Object contains both side of nodes
     Inherited from QGraphicsLineItem
 """
-class MatchingLine(QGraphicsLineItem):
-    def __init__(self, idx=None, p1=None, p2=None, color=None, parent=None):
-        super(MatchingLine, self).__init__(parent)
+class DependentLineItem(QGraphicsLineItem):
+    def __init__(self, p1=None, p2=None, parent=None):
+        super(DependentLineItem, self).__init__(parent)
         # set two MatchingPointHandle instances
         self.point1 = p1 # origin
         self.point2 = p2 # terminal
 
-        self.point1_pos = self.point1.mapToScene(0, 0) #QPointF
-        self.point2_pos = self.point2.mapToScene(0, 0) #QPointF
-        self.setLine(QLineF(self.point1_pos, self.point2_pos))
+        if self.point1 is not None:
+            self.point1_pos = self.point1.mapToScene(0, 0) #QPointF
+        if self.point2 is not None:
+            self.point2_pos = self.point2.mapToScene(0, 0) #QPointF
+
+        self.lineF = QLineF(self.point1_pos, self.point2_pos)
+        self.setLine(self.lineF)
+
+    def movePos(self, side, xdiff, ydiff):
+        if side == 0:
+            self.point1_pos = QPointF(self.point1_pos.x() + xdiff, self.point1_pos.y() + ydiff)
+            self.lineF.setP1(self.point1_pos)
+        elif side == 1:
+            self.point2_pos = QPointF(self.point2_pos.x() + xdiff, self.point2_pos.y() + ydiff)
+            self.lineF.setP2(self.point2_pos)
+        self.setLine(self.lineF)
+
+
+"""
+  class MatchingLine
+    Line Object contains both side of nodes
+    Inherited from DependentLineItem
+"""
+class MatchingLine(DependentLineItem):
+    def __init__(self, idx=None, p1=None, p2=None, color=None, parent=None):
+        super(MatchingLine, self).__init__(p1, p2, parent)
+
+        # MatchingLine number
+        self.lineID = idx
+        self.status = MainController().isAcceptedMatch(idx)
 
         if color is None:
             self.setPen(QColor(0,0,0))
         else:
             self.setPen(QColor.fromHsv(color[0], color[1], color[2]))
 
+    def setColor(self, color):
+        self.setPen(QColor.fromHsv(color[0], color[1], color[2]))
 
+
+"""
+  class PolygonEdgeLine
+    Line Object contains previous/next nodes
+    Inherited fro DependentLineItem
+"""
+class PolygonEdgeLine(DependentLineItem):
+    def __init__(self, idx=None, p1=None, p2=None, color=None, parent=None):
+        super(PolygonEdgeLine, self).__init__(p1, p2, parent)
+
+        # PolygonEdgeLine number
+        self.lineID = idx
+
+        self.setPen(QColor(160,80,0))
+
+"""
+  class ConcatenateWindow
+    This window widget displays image concatenation result
+"""
 class ConcatenateWindow(QWidget):
     def __init__(self, parent=None):
         super(ConcatenateWindow, self).__init__(parent)
@@ -706,7 +1061,387 @@ class ConcatenateWindow(QWidget):
         event.ignore()
         self.hide()
 
+"""
+  class MeasuringWindow
+    This window widget measures concatenated image
+"""
+class MeasureWindow(QWidget):
+    def __init__(self, parent=None):
+        super(MeasureWindow, self).__init__(parent)
+        self.setWindowFlags(Qt.Window)
+        self.resize(1000,600)
 
+        # Widget Parts
+        self.view = MeasureView(self)
+        # Regist self to MainController
+        MainController().setMeasureWindow(self)
+
+        self.mainLayout = QVBoxLayout(self)
+        self.buttonLayout = QGridLayout(self)
+
+        self.fromImageBox = QComboBox(self)
+        self.fromImageBox.addItem("Concatenated Image")
+        self.fromImageBox.addItem("Left Side Image")
+        self.fromImageBox.addItem("Right Side Image")
+
+        self.setImageButton = QPushButton('Set Image', self)
+        self.setPlaneButton = QPushButton('Set Plane', self)
+        self.setKeyMeasureXButton = QPushButton('Set Key Length(X)', self)
+        self.setKeyMeasureYButton = QPushButton('Set Key Length(Y)', self)
+        self.measureModeButton = QPushButton('Plot', self)
+        self.deleteAllMeasureButton = QPushButton('Delete All', self)
+        self.zoomPlusButton = QPushButton('+', self)
+        self.zoomMinusButton = QPushButton('-', self)
+
+        self.measureModeButton.setCheckable(True)
+
+        self.buttonLayout.addWidget(self.fromImageBox, 0, 0)
+        self.buttonLayout.addWidget(self.setImageButton, 0, 1)
+        self.buttonLayout.addWidget(self.setPlaneButton, 0, 2)
+        self.buttonLayout.addWidget(self.setKeyMeasureXButton, 0, 4)
+        self.buttonLayout.addWidget(self.setKeyMeasureYButton, 0, 5)
+        self.buttonLayout.addWidget(self.deleteAllMeasureButton, 0, 7)
+        self.buttonLayout.addWidget(self.measureModeButton, 0, 9)
+        self.buttonLayout.addWidget(self.zoomPlusButton, 0, 10)
+        self.buttonLayout.addWidget(self.zoomMinusButton, 0, 11)
+
+        self.mainLayout.addLayout(self.buttonLayout)
+        self.mainLayout.addWidget(self.view)
+
+        # Connect buttons to signals
+        self.connect(self.setImageButton, SIGNAL('clicked()'), self.view.setImage)
+        self.connect(self.setPlaneButton, SIGNAL('clicked()'), self.view.setPlane)
+        self.connect(self.setKeyMeasureXButton, SIGNAL('clicked()'), self.view.setKeyMeasureX)
+        self.connect(self.setKeyMeasureYButton, SIGNAL('clicked()'), self.view.setKeyMeasureY)
+        self.connect(self.deleteAllMeasureButton, SIGNAL('clicked()'), self.view.deleteAllMeasure)
+        self.connect(self.measureModeButton, SIGNAL('clicked()'), self.setMeasureMode)
+        self.connect(self.zoomPlusButton, SIGNAL('clicked()'), self.view.zoomPlus)
+        self.connect(self.zoomMinusButton, SIGNAL('clicked()'), self.view.zoomMinus)
+
+    def closeEvent(self, event):
+        event.ignore()
+        self.hide()
+
+    def getImageSource(self):
+        return self.fromImageBox.currentIndex()
+
+    def setMeasureMode(self):
+        state = self.measureModeButton.isChecked()
+        if state is True:
+            ret = self.view.setMeasureMode(True)
+            if ret is False:
+                self.measureModeButton.setChecked(False)
+        elif state is False:
+            self.view.setMeasureMode(False)
+
+
+class MeasureView(QGraphicsView):
+    zoomState = 0
+
+    capturedItems = []
+    capturedItem = None
+
+    x0, y0 = 0, 0
+
+    isSetPlaneMode = False
+    grabbingImageItem = None
+    cachedPolygon = None
+    planePolygonItem = None
+    polygonVectorCount = 0
+
+    isKeyMeasureXMode = False
+    isKeyMeasureYMode = False
+    getMeasureFlag = False
+    dialog = None
+
+    isMeasureMode = False
+    isMeasureOriginDecided = False
+    p1, p2 = None, None
+    cachedLineItem = None
+    cachedLabelItem = None
+
+    pointerH, pointerV = None, None
+
+    def __init__(self, parent=None):
+        super(MeasureView, self).__init__(parent)
+        self.scene = MeasureScene()
+        self.setScene(self.scene)
+
+        self.setMouseTracking(True)
+        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.contextMenu = QMenu()
+
+    def zoomPlus(self):
+        if self.getZoomState() < 9:
+            self.scale(1.25, 1.25)
+            self.setZoomState(self.getZoomState() + 1)
+
+    def zoomMinus(self):
+        if self.getZoomState() > -8:
+            self.scale(0.8, 0.8)
+            self.setZoomState(self.getZoomState() - 1)
+
+    def getZoomState(self):
+        return self.zoomState
+
+    def setZoomState(self, z):
+        self.zoomState = z
+
+    def setImage(self):
+        stat = self.parentWidget().getImageSource()
+
+        if stat == 0:
+            im = MainController().getConcatenatedImageObject()
+        elif stat == 1:
+            im = MainController().getMyImageObject(0)
+        elif stat == 2:
+            im = MainController().getMyImageObject(1)
+
+        MainController().measurer().setImage(im)
+
+        self.scene.drawImage(im.getInQPixmap())
+
+    def setPlane(self):
+        self.isSetPlaneMode = True
+        if self.cachedPolygon is not None:
+            self.cachedPolygon = None
+            self.scene.removeItem(self.planePolygonItem)
+            self.planePolygonItem = None
+            self.polygonVectorCount = 0 
+            self.grabbingImageItem = None
+
+    def setKeyMeasureX(self):
+        if self.dialog is None:
+            w = KeyMeasureDialog(self)
+
+        w.setCallbackSide(0)
+        w.show()
+
+    def setKeyMeasureY(self):
+        if self.dialog is None:
+            w = KeyMeasureDialog(self)
+
+        w.setCallbackSide(1)
+        w.show()
+
+    def deleteAllMeasure(self):
+        pass
+
+    def setMeasureMode(self, state):
+        if state is True:
+            if MainController().measurer().isMeasureable():
+                self.isMeasureMode = True
+            else:
+                self.isMeasureMode = False
+                return False
+
+        elif state is False:
+            self.isMeasureMode = False
+            self.removeLinePointer()
+
+    def initializeCachedPolygon(self, pos):
+        self.cachedPolygon = QPolygonF()
+        for i in range(0, 5):
+            self.cachedPolygon.append(pos)
+
+
+    def mousePressEvent(self, event):
+        self.currentPos = self.mapToScene(event.pos())
+        self.xdiff, self.ydiff = 0, 0
+        x, y = self.currentPos.x(), self.currentPos.y()
+        self.x0, self.y0 = x, y
+
+        self.capturedItems = self.items(event.pos())
+        capturedItemTypes = map(type, self.capturedItems)
+
+        for item in self.capturedItems:
+            if type(item) is QGraphicsPixmapItem:
+                currentPos_inImage = item.mapFromScene(self.currentPos)
+                if self.isSetPlaneMode:
+                    self.grabbingImageItem = item
+                    if event.button() == Qt.RightButton:
+                        if self.polygonVectorCount == 0:
+                            self.isSetPlaneMode = False
+                            self.removeLinePointer()
+                        elif self.polygonVectorCount == 1:
+                            self.cachedPolygon = None
+                            self.scene.removeItem(self.planePolygonItem)
+                        elif self.polygonVectorCount >= 2:
+                            pass
+                        return
+                    else:
+                        if self.cachedPolygon == None:
+                            self.initializeCachedPolygon(currentPos_inImage)
+                            item = QGraphicsPolygonItem(self.cachedPolygon, item)
+                            self.planePolygonItem = item
+                            self.polygonVectorCount = 1
+                        elif self.polygonVectorCount in [1, 2, 3]:
+                            self.cachedPolygon.replace(self.polygonVectorCount, currentPos_inImage)
+                            print self.polygonVectorCount, self.cachedPolygon.at(self.polygonVectorCount)
+                            self.planePolygonItem.setPolygon(self.cachedPolygon)
+                            self.planePolygonItem.update()
+                            self.polygonVectorCount += 1
+
+                            if self.polygonVectorCount == 4:
+                                for i in range(0, 5):
+                                    print self.cachedPolygon.at(i)
+                                self.grabbingImageItem = None
+                                self.isSetPlaneMode = False
+                                self.removeLinePointer()
+
+                                MainController().measurer().setPlane(self.cachedPolygon)
+
+                elif self.isMeasureMode:
+                    self.grabbingImageItem = item
+                    if self.isMeasureOriginDecided:
+                        self.p2 = MainController().measurer().warpPerspective(currentPos_inImage)
+                        line = self.cachedLineItem.line()
+                        line.setP2(self.currentPos)
+                        self.cachedLineItem.setLine(line)
+
+                        self.scene.removeItem(self.cachedLineItem)
+                        self.scene.removeItem(self.cachedLabelItem)
+
+                        self.isMeasureOriginDecided = False
+                        self.cachedLineItem = None
+                        self.cachedLabelItem = None
+                        self.removeLinePointer()
+                    else:
+                        self.p1 = MainController().measurer().warpPerspective(currentPos_inImage)
+                        self.cachedLineItem = \
+                                QGraphicsLineItem(QLineF(currentPos_inImage, currentPos_inImage), item)
+                        self.cachedLineItem.setPen(QColor(0, 255, 30))
+                        self.cachedLabelItem = QGraphicsTextItem(item)
+                        self.cachedLabelItem.setDefaultTextColor(QColor(0, 255, 30))
+                        self.scene.addItem(self.cachedLineItem)
+                        self.scene.addItem(self.cachedLabelItem)
+                        self.isMeasureOriginDecided = True
+
+                else:
+                    print MainController().measurer().warpPerspective(currentPos_inImage)
+        else:
+            super(MeasureView, self).mousePressEvent(event)
+            return
+
+    def mouseMoveEvent(self, event):
+        self.currentPos = self.mapToScene(event.pos())
+        x, y = self.currentPos.x(), self.currentPos.y()
+        xdiff, ydiff = x - self.x0, y - self.y0
+
+        if self.isSetPlaneMode:
+            self.drawLinePointer(self.currentPos)
+            if self.polygonVectorCount != 0:
+                currentPos_inImage = self.grabbingImageItem.mapFromScene(self.currentPos)
+                self.cachedPolygon.replace(self.polygonVectorCount, currentPos_inImage)
+                self.planePolygonItem.setPolygon(self.cachedPolygon)
+                self.planePolygonItem.update()
+
+            self.x0, self.y0 = x, y
+            return
+
+        elif self.isMeasureMode:
+            self.drawLinePointer(self.currentPos)
+
+            if self.isMeasureOriginDecided:
+                currentPos_inImage = self.grabbingImageItem.mapFromScene(self.currentPos)
+                line = self.cachedLineItem.line()
+                line.setP2(self.currentPos)
+
+                labelPosX = (line.x1() + line.x2()) / 2.0 + 10
+                labelPosY = (line.y1() + line.y2()) / 2.0 - 10
+                self.cachedLineItem.setLine(line)
+                self.cachedLabelItem.setPos(QPointF(labelPosX, labelPosY))
+
+                self.p2 = MainController().measurer().warpPerspective(self.currentPos)
+
+                self.cachedLabelItem.setPlainText("%6.2f mm" % \
+                        MainController().measurer().measureDistance(self.p1, self.p2))
+
+            self.x0, self.y0 = x, y
+            return
+
+        super(MeasureView, self).mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        super(MeasureView, self).mouseReleaseEvent(event)
+
+    def drawLinePointer(self, pos):
+        self.removeLinePointer()
+
+        left, top = self.sceneRect().x(), self.sceneRect().y()
+        w, h = self.sceneRect().width(), self.sceneRect().height()
+        x, y = pos.x(), pos.y()
+
+        self.pointerH = self.scene.addLine(left, y, left+w, y)
+        self.pointerH.setPen(QColor(120,120,120))
+        self.pointerV = self.scene.addLine(x, top, x, top+h)
+        self.pointerV.setPen(QColor(120,120,120))
+
+    def removeLinePointer(self):
+        if self.pointerH is not None:
+            self.scene.removeItem(self.pointerH)
+            self.pointerH = None
+        if self.pointerV is not None:
+            self.scene.removeItem(self.pointerV)
+            self.pointerV = None
+        self.scene.update()
+
+
+class MeasureScene(QGraphicsScene):
+    pixmapItems = []
+    measureLineItems = []
+    measureLabelItems = []
+
+    def __init__(self, parent=None):
+        super(MeasureScene, self).__init__(parent)
+        self.setBackgroundBrush(QColor(200, 200, 200))
+
+    def drawImage(self, pixmap):
+        item = QGraphicsPixmapItem(pixmap)
+        self.addItem(item)
+        self.pixmapItems.append(item)
+
+
+class KeyMeasureDialog(QWidget):
+    def __init__(self, parent=None):
+        super(KeyMeasureDialog, self).__init__(parent)
+        self.setWindowFlags(Qt.Dialog)
+
+        self.callbackSide = 0
+
+        self.resize(300,80)
+        self.layout = QHBoxLayout()
+
+        self.leftLabel = QLabel("Key length:", self)
+        self.layout.addWidget(self.leftLabel)
+        self.numberBox = QLineEdit(self)
+        self.layout.addWidget(self.numberBox)
+        self.rightLabel = QLabel("(mm)", self)
+        self.layout.addWidget(self.rightLabel)
+        self.okButton = QPushButton("OK", self)
+        self.layout.addWidget(self.okButton)
+
+        self.setLayout(self.layout)
+
+        self.connect(self.numberBox, SIGNAL('returnPressed()'), self.pushOK)
+        self.connect(self.okButton, SIGNAL('clicked()'), self.pushOK)
+
+    def setCallbackSide(self, side):
+        if side == 0:
+            self.callbackSide = 0
+        elif side == 1:
+            self.callbackSide = 1
+
+    def pushOK(self):
+        mm = self.numberBox.text()
+        print mm
+
+        if self.callbackSide == 0:
+            MainController().measurer().setKeyMeasureX(int(mm))
+        elif self.callbackSide == 1:
+            MainController().measurer().setKeyMeasureY(int(mm))
+
+        self.hide()
 
 def main():
     app = QApplication(sys.argv)

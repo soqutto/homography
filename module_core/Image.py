@@ -94,6 +94,9 @@ class MyImage:
             for i in range(0, self.slicePolygon.count()):
                 self.slicePolygon.replace(i, self.slicePolygon.at(i) + offset)
 
+    def unsetSlice(self):
+        self.slicePolygon = None
+
     # Connect to PixmapItem on GUI
     def setPixmapItem(self, item):
         self.pixmapItem = item

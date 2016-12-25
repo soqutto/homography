@@ -174,8 +174,14 @@ class MatchingProcessor:
 
     def rehashHomography(self):
         self.H, _ = cv2.findHomography( \
-                np.float32([m.point2 for m in matchPairs if m.isAccepted()]), \
-                np.float32([m.point1 for m in matchPairs if m.isAccepted()]))
+                np.float32([m.point2 for m in self.matchPairs if m.isAccepted()]), \
+                np.float32([m.point1 for m in self.matchPairs if m.isAccepted()]))
+
+    def dumpMatch(self, idx=None):
+        for (i, match) in enumerate(self.matchPairs):
+            if idx is None or i == idx:
+                print "Match idx:%2d, p1:%s, p2:%s, distance:%3.1f, stat:%s" % \
+                    (i, match.point1, match.point2, match.distance, match.isAccepted())
     
     def drawMatch(self):
         self.deleteAllMatches()
@@ -186,10 +192,13 @@ class MatchingProcessor:
         self.matchCompleteFlag = True
 
     def deleteAllMatches(self):
-        self.im1.pixmapItem.deleteAllMatchingPoint()
-        self.im2.pixmapItem.deleteAllMatchingPoint()
-        self.im1.pixmapItem.scene().deleteAllMatchingLine()
+        if self.im1.pixmapItem is not None:
+            self.im1.pixmapItem.scene().deleteAllMatchingLine()
+            self.im1.pixmapItem.deleteAllMatchingPoint()
+        if self.im2.pixmapItem is not None:
+            self.im2.pixmapItem.deleteAllMatchingPoint()
         self.clean()
+
 
 
 class MatchPair:
@@ -213,10 +222,10 @@ class MatchPair:
 
     def setPoint(self, index, x=None, y=None):
         # その対応の座標位置を強制的に書き換える
-        # index == 1でpoint1を, index == 2でpoint2を書き換える
-        if index == 1:
+        # index == 0でpoint1を, index == 1でpoint2を書き換える
+        if index == 0:
             p = self.point1
-        elif index == 2:
+        elif index == 1:
             p = self.point2
         else:
             return
@@ -229,9 +238,9 @@ class MatchPair:
     def setPointByOffset(self, index, x=None, y=None):
         # その対応の座標位置を強制的に書き換える
         # setPointの指定方法の代わりに差分(移動量)を用いる
-        if index == 1:
+        if index == 0:
             p = self.point1
-        elif index == 2:
+        elif index == 1:
             p = self.point2
         else:
             return
