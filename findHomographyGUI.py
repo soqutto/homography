@@ -1039,6 +1039,10 @@ class PolygonEdgeLine(DependentLineItem):
 
         self.setPen(QColor(160,80,0))
 
+"""
+  class ConcatenateWindow
+    This window widget displays image concatenation result
+"""
 class ConcatenateWindow(QWidget):
     def __init__(self, parent=None):
         super(ConcatenateWindow, self).__init__(parent)
@@ -1057,7 +1061,387 @@ class ConcatenateWindow(QWidget):
         event.ignore()
         self.hide()
 
+"""
+  class MeasuringWindow
+    This window widget measures concatenated image
+"""
+class MeasureWindow(QWidget):
+    def __init__(self, parent=None):
+        super(MeasureWindow, self).__init__(parent)
+        self.setWindowFlags(Qt.Window)
+        self.resize(1000,600)
 
+        # Widget Parts
+        self.view = MeasureView(self)
+        # Regist self to MainController
+        MainController().setMeasureWindow(self)
+
+        self.mainLayout = QVBoxLayout(self)
+        self.buttonLayout = QGridLayout(self)
+
+        self.fromImageBox = QComboBox(self)
+        self.fromImageBox.addItem("Concatenated Image")
+        self.fromImageBox.addItem("Left Side Image")
+        self.fromImageBox.addItem("Right Side Image")
+
+        self.setImageButton = QPushButton('Set Image', self)
+        self.setPlaneButton = QPushButton('Set Plane', self)
+        self.setKeyMeasureXButton = QPushButton('Set Key Length(X)', self)
+        self.setKeyMeasureYButton = QPushButton('Set Key Length(Y)', self)
+        self.measureModeButton = QPushButton('Plot', self)
+        self.deleteAllMeasureButton = QPushButton('Delete All', self)
+        self.zoomPlusButton = QPushButton('+', self)
+        self.zoomMinusButton = QPushButton('-', self)
+
+        self.measureModeButton.setCheckable(True)
+
+        self.buttonLayout.addWidget(self.fromImageBox, 0, 0)
+        self.buttonLayout.addWidget(self.setImageButton, 0, 1)
+        self.buttonLayout.addWidget(self.setPlaneButton, 0, 2)
+        self.buttonLayout.addWidget(self.setKeyMeasureXButton, 0, 4)
+        self.buttonLayout.addWidget(self.setKeyMeasureYButton, 0, 5)
+        self.buttonLayout.addWidget(self.deleteAllMeasureButton, 0, 7)
+        self.buttonLayout.addWidget(self.measureModeButton, 0, 9)
+        self.buttonLayout.addWidget(self.zoomPlusButton, 0, 10)
+        self.buttonLayout.addWidget(self.zoomMinusButton, 0, 11)
+
+        self.mainLayout.addLayout(self.buttonLayout)
+        self.mainLayout.addWidget(self.view)
+
+        # Connect buttons to signals
+        self.connect(self.setImageButton, SIGNAL('clicked()'), self.view.setImage)
+        self.connect(self.setPlaneButton, SIGNAL('clicked()'), self.view.setPlane)
+        self.connect(self.setKeyMeasureXButton, SIGNAL('clicked()'), self.view.setKeyMeasureX)
+        self.connect(self.setKeyMeasureYButton, SIGNAL('clicked()'), self.view.setKeyMeasureY)
+        self.connect(self.deleteAllMeasureButton, SIGNAL('clicked()'), self.view.deleteAllMeasure)
+        self.connect(self.measureModeButton, SIGNAL('clicked()'), self.setMeasureMode)
+        self.connect(self.zoomPlusButton, SIGNAL('clicked()'), self.view.zoomPlus)
+        self.connect(self.zoomMinusButton, SIGNAL('clicked()'), self.view.zoomMinus)
+
+    def closeEvent(self, event):
+        event.ignore()
+        self.hide()
+
+    def getImageSource(self):
+        return self.fromImageBox.currentIndex()
+
+    def setMeasureMode(self):
+        state = self.measureModeButton.isChecked()
+        if state is True:
+            ret = self.view.setMeasureMode(True)
+            if ret is False:
+                self.measureModeButton.setChecked(False)
+        elif state is False:
+            self.view.setMeasureMode(False)
+
+
+class MeasureView(QGraphicsView):
+    zoomState = 0
+
+    capturedItems = []
+    capturedItem = None
+
+    x0, y0 = 0, 0
+
+    isSetPlaneMode = False
+    grabbingImageItem = None
+    cachedPolygon = None
+    planePolygonItem = None
+    polygonVectorCount = 0
+
+    isKeyMeasureXMode = False
+    isKeyMeasureYMode = False
+    getMeasureFlag = False
+    dialog = None
+
+    isMeasureMode = False
+    isMeasureOriginDecided = False
+    p1, p2 = None, None
+    cachedLineItem = None
+    cachedLabelItem = None
+
+    pointerH, pointerV = None, None
+
+    def __init__(self, parent=None):
+        super(MeasureView, self).__init__(parent)
+        self.scene = MeasureScene()
+        self.setScene(self.scene)
+
+        self.setMouseTracking(True)
+        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.contextMenu = QMenu()
+
+    def zoomPlus(self):
+        if self.getZoomState() < 9:
+            self.scale(1.25, 1.25)
+            self.setZoomState(self.getZoomState() + 1)
+
+    def zoomMinus(self):
+        if self.getZoomState() > -8:
+            self.scale(0.8, 0.8)
+            self.setZoomState(self.getZoomState() - 1)
+
+    def getZoomState(self):
+        return self.zoomState
+
+    def setZoomState(self, z):
+        self.zoomState = z
+
+    def setImage(self):
+        stat = self.parentWidget().getImageSource()
+
+        if stat == 0:
+            im = MainController().getConcatenatedImageObject()
+        elif stat == 1:
+            im = MainController().getMyImageObject(0)
+        elif stat == 2:
+            im = MainController().getMyImageObject(1)
+
+        MainController().measurer().setImage(im)
+
+        self.scene.drawImage(im.getInQPixmap())
+
+    def setPlane(self):
+        self.isSetPlaneMode = True
+        if self.cachedPolygon is not None:
+            self.cachedPolygon = None
+            self.scene.removeItem(self.planePolygonItem)
+            self.planePolygonItem = None
+            self.polygonVectorCount = 0 
+            self.grabbingImageItem = None
+
+    def setKeyMeasureX(self):
+        if self.dialog is None:
+            w = KeyMeasureDialog(self)
+
+        w.setCallbackSide(0)
+        w.show()
+
+    def setKeyMeasureY(self):
+        if self.dialog is None:
+            w = KeyMeasureDialog(self)
+
+        w.setCallbackSide(1)
+        w.show()
+
+    def deleteAllMeasure(self):
+        pass
+
+    def setMeasureMode(self, state):
+        if state is True:
+            if MainController().measurer().isMeasureable():
+                self.isMeasureMode = True
+            else:
+                self.isMeasureMode = False
+                return False
+
+        elif state is False:
+            self.isMeasureMode = False
+            self.removeLinePointer()
+
+    def initializeCachedPolygon(self, pos):
+        self.cachedPolygon = QPolygonF()
+        for i in range(0, 5):
+            self.cachedPolygon.append(pos)
+
+
+    def mousePressEvent(self, event):
+        self.currentPos = self.mapToScene(event.pos())
+        self.xdiff, self.ydiff = 0, 0
+        x, y = self.currentPos.x(), self.currentPos.y()
+        self.x0, self.y0 = x, y
+
+        self.capturedItems = self.items(event.pos())
+        capturedItemTypes = map(type, self.capturedItems)
+
+        for item in self.capturedItems:
+            if type(item) is QGraphicsPixmapItem:
+                currentPos_inImage = item.mapFromScene(self.currentPos)
+                if self.isSetPlaneMode:
+                    self.grabbingImageItem = item
+                    if event.button() == Qt.RightButton:
+                        if self.polygonVectorCount == 0:
+                            self.isSetPlaneMode = False
+                            self.removeLinePointer()
+                        elif self.polygonVectorCount == 1:
+                            self.cachedPolygon = None
+                            self.scene.removeItem(self.planePolygonItem)
+                        elif self.polygonVectorCount >= 2:
+                            pass
+                        return
+                    else:
+                        if self.cachedPolygon == None:
+                            self.initializeCachedPolygon(currentPos_inImage)
+                            item = QGraphicsPolygonItem(self.cachedPolygon, item)
+                            self.planePolygonItem = item
+                            self.polygonVectorCount = 1
+                        elif self.polygonVectorCount in [1, 2, 3]:
+                            self.cachedPolygon.replace(self.polygonVectorCount, currentPos_inImage)
+                            print self.polygonVectorCount, self.cachedPolygon.at(self.polygonVectorCount)
+                            self.planePolygonItem.setPolygon(self.cachedPolygon)
+                            self.planePolygonItem.update()
+                            self.polygonVectorCount += 1
+
+                            if self.polygonVectorCount == 4:
+                                for i in range(0, 5):
+                                    print self.cachedPolygon.at(i)
+                                self.grabbingImageItem = None
+                                self.isSetPlaneMode = False
+                                self.removeLinePointer()
+
+                                MainController().measurer().setPlane(self.cachedPolygon)
+
+                elif self.isMeasureMode:
+                    self.grabbingImageItem = item
+                    if self.isMeasureOriginDecided:
+                        self.p2 = MainController().measurer().warpPerspective(currentPos_inImage)
+                        line = self.cachedLineItem.line()
+                        line.setP2(self.currentPos)
+                        self.cachedLineItem.setLine(line)
+
+                        self.scene.removeItem(self.cachedLineItem)
+                        self.scene.removeItem(self.cachedLabelItem)
+
+                        self.isMeasureOriginDecided = False
+                        self.cachedLineItem = None
+                        self.cachedLabelItem = None
+                        self.removeLinePointer()
+                    else:
+                        self.p1 = MainController().measurer().warpPerspective(currentPos_inImage)
+                        self.cachedLineItem = \
+                                QGraphicsLineItem(QLineF(currentPos_inImage, currentPos_inImage), item)
+                        self.cachedLineItem.setPen(QColor(0, 255, 30))
+                        self.cachedLabelItem = QGraphicsTextItem(item)
+                        self.cachedLabelItem.setDefaultTextColor(QColor(0, 255, 30))
+                        self.scene.addItem(self.cachedLineItem)
+                        self.scene.addItem(self.cachedLabelItem)
+                        self.isMeasureOriginDecided = True
+
+                else:
+                    print MainController().measurer().warpPerspective(currentPos_inImage)
+        else:
+            super(MeasureView, self).mousePressEvent(event)
+            return
+
+    def mouseMoveEvent(self, event):
+        self.currentPos = self.mapToScene(event.pos())
+        x, y = self.currentPos.x(), self.currentPos.y()
+        xdiff, ydiff = x - self.x0, y - self.y0
+
+        if self.isSetPlaneMode:
+            self.drawLinePointer(self.currentPos)
+            if self.polygonVectorCount != 0:
+                currentPos_inImage = self.grabbingImageItem.mapFromScene(self.currentPos)
+                self.cachedPolygon.replace(self.polygonVectorCount, currentPos_inImage)
+                self.planePolygonItem.setPolygon(self.cachedPolygon)
+                self.planePolygonItem.update()
+
+            self.x0, self.y0 = x, y
+            return
+
+        elif self.isMeasureMode:
+            self.drawLinePointer(self.currentPos)
+
+            if self.isMeasureOriginDecided:
+                currentPos_inImage = self.grabbingImageItem.mapFromScene(self.currentPos)
+                line = self.cachedLineItem.line()
+                line.setP2(self.currentPos)
+
+                labelPosX = (line.x1() + line.x2()) / 2.0 + 10
+                labelPosY = (line.y1() + line.y2()) / 2.0 - 10
+                self.cachedLineItem.setLine(line)
+                self.cachedLabelItem.setPos(QPointF(labelPosX, labelPosY))
+
+                self.p2 = MainController().measurer().warpPerspective(self.currentPos)
+
+                self.cachedLabelItem.setPlainText("%6.2f mm" % \
+                        MainController().measurer().measureDistance(self.p1, self.p2))
+
+            self.x0, self.y0 = x, y
+            return
+
+        super(MeasureView, self).mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        super(MeasureView, self).mouseReleaseEvent(event)
+
+    def drawLinePointer(self, pos):
+        self.removeLinePointer()
+
+        left, top = self.sceneRect().x(), self.sceneRect().y()
+        w, h = self.sceneRect().width(), self.sceneRect().height()
+        x, y = pos.x(), pos.y()
+
+        self.pointerH = self.scene.addLine(left, y, left+w, y)
+        self.pointerH.setPen(QColor(120,120,120))
+        self.pointerV = self.scene.addLine(x, top, x, top+h)
+        self.pointerV.setPen(QColor(120,120,120))
+
+    def removeLinePointer(self):
+        if self.pointerH is not None:
+            self.scene.removeItem(self.pointerH)
+            self.pointerH = None
+        if self.pointerV is not None:
+            self.scene.removeItem(self.pointerV)
+            self.pointerV = None
+        self.scene.update()
+
+
+class MeasureScene(QGraphicsScene):
+    pixmapItems = []
+    measureLineItems = []
+    measureLabelItems = []
+
+    def __init__(self, parent=None):
+        super(MeasureScene, self).__init__(parent)
+        self.setBackgroundBrush(QColor(200, 200, 200))
+
+    def drawImage(self, pixmap):
+        item = QGraphicsPixmapItem(pixmap)
+        self.addItem(item)
+        self.pixmapItems.append(item)
+
+
+class KeyMeasureDialog(QWidget):
+    def __init__(self, parent=None):
+        super(KeyMeasureDialog, self).__init__(parent)
+        self.setWindowFlags(Qt.Dialog)
+
+        self.callbackSide = 0
+
+        self.resize(300,80)
+        self.layout = QHBoxLayout()
+
+        self.leftLabel = QLabel("Key length:", self)
+        self.layout.addWidget(self.leftLabel)
+        self.numberBox = QLineEdit(self)
+        self.layout.addWidget(self.numberBox)
+        self.rightLabel = QLabel("(mm)", self)
+        self.layout.addWidget(self.rightLabel)
+        self.okButton = QPushButton("OK", self)
+        self.layout.addWidget(self.okButton)
+
+        self.setLayout(self.layout)
+
+        self.connect(self.numberBox, SIGNAL('returnPressed()'), self.pushOK)
+        self.connect(self.okButton, SIGNAL('clicked()'), self.pushOK)
+
+    def setCallbackSide(self, side):
+        if side == 0:
+            self.callbackSide = 0
+        elif side == 1:
+            self.callbackSide = 1
+
+    def pushOK(self):
+        mm = self.numberBox.text()
+        print mm
+
+        if self.callbackSide == 0:
+            MainController().measurer().setKeyMeasureX(int(mm))
+        elif self.callbackSide == 1:
+            MainController().measurer().setKeyMeasureY(int(mm))
+
+        self.hide()
 
 def main():
     app = QApplication(sys.argv)
