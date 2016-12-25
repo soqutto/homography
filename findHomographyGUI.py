@@ -15,6 +15,7 @@ import cv2
 from module_core.Image import *
 from module_core.Matcher import *
 from module_core.Concatenate import *
+from module_core.Measure import *
 
 class MyWindow(QMainWindow):
     def __init__(self):
