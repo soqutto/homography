@@ -65,10 +65,14 @@ class MainController(object):
             cls.__instance.__parentWindow = None
 
             cls.__instance.__myImageObjects = [None, None]
-            cls.__instance.__concatenateImageObject = None
+            cls.__instance.__concatenatedImageObject = None
+            cls.__instance.__measuredImageObject = None
+
             cls.__instance.__matchingProcessor = MatchingProcessor()
             cls.__instance.__concatenator = None
             cls.__instance.__concatenateWindow = None
+            cls.__instance.__measurer = None
+            cls.__instance.__measureWindow = None
             cls.__instance.__inputWidget = None
             cls.__instance.__canvasWidget = None
             cls.__instance.__canvasView = None
@@ -85,23 +89,56 @@ class MainController(object):
     def setConcatenator(self, con):
         self.__concatenator = con
 
-    def setConcatenatorWindow(self, widget):
-        self.__concatenatorWindow = widget
+    def concatenator(self):
+        return self.__concatenator
+
+    def setConcatenateWindow(self, widget):
+        self.__concatenateWindow = widget
+
+    def concatenateWindow(self):
+        return self.__concatenateWindow
+
+    def setMeasurer(self, mes):
+        self.__measurer = mes
+
+    def measurer(self):
+        return self.__measurer
+
+    def setMeasureWindow(self, widget):
+        self.__measureWindow = widget
+
+    def measureWindow(self):
+        return self.__measureWindow
 
     def setInputWidget(self, widget):
         self.__inputWidget = widget
 
+    def inputWidget(self):
+        return self.__inputWidget
+
     def setCanvasWidget(self, widget):
         self.__canvasWidget = widget
+
+    def canvasWidget(self):
+        return self.__canvasWidget
 
     def setCanvasView(self, widget):
         self.__canvasView = widget
 
+    def canvasView(self):
+        return self.__canvasView
+
     def setCanvasScene(self, widget):
         self.__canvasScene = widget
 
+    def canvasScene(self):
+        return self.__canvasScene
+
     def setControlWidget(self, widget):
         self.__controlWidget = widget
+
+    def controlWidget(self):
+        return self.__controlWidget
 
     def imageRegist(self, pos, filepath):
         self.__myImageObjects[pos] = MyImage(filepath)
@@ -118,6 +155,15 @@ class MainController(object):
             if obj is item:
                 self.__myImageObjects[i] = None
                 self.__matchingProcessor.deleteAllMatches()
+
+    def getMyImageObject(self, side):
+        if side == 0 or side == 1:
+            return self.__myImageObjects[side]
+        else:
+            return None
+
+    def getConcatenatedImageObject(self):
+        return self.__concatenatedImageObject
 
     def getSide(self, imageObject):
         for (i, obj) in enumerate(self.__myImageObjects):
@@ -188,11 +234,32 @@ class MainController(object):
             self.__concatenateWindow.activateWindow()
 
         img = self.__concatenator.concatenate()
+        self.setConcatenatedImage(img)
         self.__concatenateWindow.drawImage(img.getInQPixmap())
 
+    def setConcatenatedImage(self, img):
+        self.__concatenatedImageObject = img
+
+    def getConcatenatedImage(self):
+        return self.__concatenatedImageObject
+
+    def setMeasuredImage(self, img):
+        self.__measuredImageObject = img
+
+    def getMeasuredImage(self, img):
+        return self.__measuredImageObject
 
     def deleteAllMatches(self):
         self.__matchingProcessor.deleteAllMatches()
+
+    def execMeasure(self):
+        if self.__measureWindow is None:
+            self.__measurer = Measure()
+            self.__measureWindow = MeasureWindow(self.__parentWindow)
+            self.__measureWindow.show()
+        else:
+            self.__measureWindow.show()
+            self.__measureWindow.activateWindow()
 
 
 class ImageInputWidget(QWidget):
@@ -397,6 +464,7 @@ class MatchingControlWidget(QWidget):
         self.connect(self.execButton1, SIGNAL('clicked()'), MainController().execMatch)
         self.connect(self.execButton2, SIGNAL('clicked()'), MainController().execConcatenate)
         self.connect(self.execButton3, SIGNAL('clicked()'), MainController().deleteAllMatches)
+        self.connect(self.execButton4, SIGNAL('clicked()'), MainController().execMeasure)
 
         #-------------------------------------------------------
         # Matched Point List Section
