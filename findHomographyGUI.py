@@ -896,19 +896,19 @@ class ImageWithMatchingPoint(QGraphicsItemGroup):
 #                self.addToGroup(line)
 
 
+"""
+  class DraggableHandle
     Group Object of QGraphicsRectItem, QGraphicsLineItem
     Inherited from QGraphicsItemGroup
+    Abstract Class of MatchingPointHandle
 """
-class MatchingPointHandle(QGraphicsItemGroup):
-    def __init__(self, side, idx, parent=None):
-        super(MatchingPointHandle, self).__init__(parent)
+
+class DraggableHandle(QGraphicsItemGroup):
+    def __init__(self, side, parent=None):
+        super(DraggableHandle, self).__init__(parent)
 
         self.side = side
-        self.pointID = idx
         self.items = []
-
-        # Pointer to corresponding MatchingLine
-        self.line = None
 
         self.frame = QGraphicsRectItem(QRectF(-5,-5,10,10), self)
         self.frame.setPen(QColor(0,0,0))
@@ -929,6 +929,24 @@ class MatchingPointHandle(QGraphicsItemGroup):
     def moveOffset(self, xdiff, ydiff):
         x, y = self.pos().x(), self.pos().y()
         self.setPos(x + xdiff, y + ydiff)
+
+
+"""
+  class MatchingPointHandle
+    Group Object of QGraphicsRectItem, QGraphicsLineItem
+    Inherited from DraggableHandle
+"""
+class MatchingPointHandle(DraggableHandle):
+    def __init__(self, side, idx, parent=None):
+        super(MatchingPointHandle, self).__init__(side, parent)
+
+        self.pointID = idx
+
+        # Pointer to corresponding MatchingLine
+        self.line = None
+
+    def moveOffset(self, xdiff, ydiff):
+        super(MatchingPointHandle, self).moveOffset(xdiff, ydiff)
         self.line.movePos(self.side, xdiff, ydiff)
 
     def setMatchingLine(self, lineObject):
@@ -984,6 +1002,24 @@ class DependentLineItem(QGraphicsLineItem):
             self.lineF.setP2(self.point2_pos)
         self.setLine(self.lineF)
 
+
+"""
+  class MatchingLine
+    Line Object contains both side of nodes
+    Inherited from DependentLineItem
+"""
+class MatchingLine(DependentLineItem):
+    def __init__(self, idx=None, p1=None, p2=None, color=None, parent=None):
+        super(MatchingLine, self).__init__(p1, p2, parent)
+
+        # MatchingLine number
+        self.lineID = idx
+        self.status = MainController().isAcceptedMatch(idx)
+
+        if color is None:
+            self.setPen(QColor(0,0,0))
+        else:
+            self.setPen(QColor.fromHsv(color[0], color[1], color[2]))
 
     def setColor(self, color):
         self.setPen(QColor.fromHsv(color[0], color[1], color[2]))
