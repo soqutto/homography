@@ -63,7 +63,7 @@ class Concatenator:
         sY = int(round(y2 + Y * 1.25))
 
         im1 = self.image1.getInNumpy()
-        warpedImage = cv2.warpPerspective(self.image2.getInNumpy(), self.transform, (int(x2+X*1.25), int(y2+Y*1.25)))
+        warpedImage = cv2.warpPerspective(self.image2.getInNumpy(), self.transform, (int(x2+X*2), int(y2+Y*2)))
 
         for i in xrange(x1):
             for j in xrange(y1):
